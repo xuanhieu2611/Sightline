@@ -48,21 +48,72 @@ export function TapButton({ onAction, onLongPress }: TapButtonProps) {
       navigator.vibrate([100, 50, 100])
     }
 
-    // Simulate AI processing
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    try {
+      // Try to access camera for real image analysis
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      })
 
-    // Generate contextual response
-    const responses = [
-      "Two people ahead. Door slightly right. Clear path left.",
-      "Obstacle detected at 2 o'clock. Safe passage to your left.",
-      "Clear path ahead. No obstacles detected.",
-      "Stairs ahead. Handrail on your right.",
-      "Doorway detected. Handle on the left side.",
-      "Crowded area. Move slowly and stay to the right.",
-    ]
+      // Create a canvas to capture the image
+      const video = document.createElement("video")
+      video.srcObject = stream
+      video.play()
 
-    const response = responses[Math.floor(Math.random() * responses.length)]
-    onAction(response)
+      await new Promise((resolve) => {
+        video.onloadedmetadata = resolve
+      })
+
+      const canvas = document.createElement("canvas")
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      const ctx = canvas.getContext("2d")
+      ctx?.drawImage(video, 0, 0)
+
+      // Stop the camera
+      stream.getTracks().forEach((track) => track.stop())
+
+      // Convert to blob and send to API
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob(resolve!, "image/jpeg", 0.8)
+      })
+
+      const formData = new FormData()
+      formData.append("image", blob, "camera-capture.jpg")
+
+      const response = await fetch("/api/analyze-image", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        onAction(result.description)
+      } else {
+        throw new Error(result.error || "Analysis failed")
+      }
+    } catch (error) {
+      console.log("Camera access failed, using fallback:", error)
+
+      // Fallback to simulated response
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+
+      const responses = [
+        "Two people ahead. Door slightly right. Clear path left.",
+        "Obstacle detected at 2 o'clock. Safe passage to your left.",
+        "Clear path ahead. No obstacles detected.",
+        "Stairs ahead. Handrail on your right.",
+        "Doorway detected. Handle on the left side.",
+        "Crowded area. Move slowly and stay to the right.",
+      ]
+
+      const response = responses[Math.floor(Math.random() * responses.length)]
+      onAction(response)
+    }
 
     setIsScanning(false)
   }

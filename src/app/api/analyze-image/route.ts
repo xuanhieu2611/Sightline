@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes)
     const base64Image = buffer.toString("base64")
 
-    // Initialize Gemini model
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+    // Initialize Gemini model - try the latest available model
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     // Create the prompt for accessibility-focused description
     const prompt = `
@@ -63,17 +63,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error analyzing image:", error)
-
-    // Fallback response for development/testing
-    if (process.env.NODE_ENV === "development") {
-      return NextResponse.json({
-        success: true,
-        description:
-          "Two people ahead. Door slightly right. Clear path left. Exit sign visible at 2 o'clock, approximately 20 feet away. Floor appears clear with no obstacles in the immediate path.",
-        timestamp: new Date().toISOString(),
-        note: "Development mode - using placeholder response",
-      })
-    }
 
     return NextResponse.json(
       {

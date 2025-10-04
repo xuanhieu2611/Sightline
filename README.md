@@ -97,6 +97,23 @@ npm start
 
 Visit `/icons/create-icons.html` to generate proper PWA icons.
 
+## AI Integration
+
+### Gemini API Setup
+
+The app uses Google's Gemini AI for real-time image analysis:
+
+1. **Get API Key**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. **Set Environment**: Create `.env.local` with your API key
+3. **Test Integration**: Visit `/test-analyzer` to test image analysis
+
+### API Features
+
+- **Real-time Analysis**: Camera capture with instant AI analysis
+- **Accessibility Focus**: Descriptions optimized for navigation assistance
+- **Error Handling**: Graceful fallbacks when API is unavailable
+- **Privacy**: Images processed in real-time, not stored
+
 ## Architecture
 
 ### Components

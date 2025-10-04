@@ -21,8 +21,8 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: "/icons/icon-192x192.png",
-    apple: "/icons/icon-152x152.png",
+    icon: "/icons/icon-192x192.svg",
+    apple: "/icons/icon-152x152.svg",
   },
 }
 
@@ -48,8 +48,8 @@ export default function RootLayout({
           content="black-translucent"
         />
         <meta name="apple-mobile-web-app-title" content="Sightline" />
-        <link rel="apple-touch-icon" href="/icons/icon-152x152.png" />
-        <link rel="icon" href="/icons/icon-192x192.png" />
+        <link rel="apple-touch-icon" href="/icons/icon-152x152.svg" />
+        <link rel="icon" href="/icons/icon-192x192.svg" />
       </head>
       <body className={`${inter.className} bg-black text-white antialiased`}>
         {children}

@@ -12,6 +12,7 @@
     "icons:generate": "node scripts/generate-icons.js"
   },
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.17.0",
     "@google/generative-ai": "^0.24.1",
     "dotenv": "^17.2.3",
     "multer": "^2.0.2",

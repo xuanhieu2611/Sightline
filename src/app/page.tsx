@@ -73,13 +73,11 @@ export default function Home() {
           if (!line.trim()) continue;
           try {
             const obj = JSON.parse(line);
-            // server sends chunks with { chunk: "...", done: false } and final with done: true + description
+            // only append incremental chunks; ignore final `description`
             if (obj.chunk) {
               setAnalysis((s) => s + obj.chunk);
-            } else if (obj.description) {
-              setAnalysis((s) => (s ? s + "\n" + obj.description : obj.description));
             } else if (obj.error) {
-              setAnalysis((_) => `Error: ${obj.error}`);
+              setAnalysis(`Error: ${obj.error}`);
             }
           } catch (e) {
             // ignore parse errors for partial lines
@@ -87,12 +85,11 @@ export default function Home() {
         }
       }
 
-      // flush any remaining buffered line
+      // flush any remaining buffered line (only handle chunk, ignore description)
       if (buffer.trim()) {
         try {
           const obj = JSON.parse(buffer);
           if (obj.chunk) setAnalysis((s) => s + obj.chunk);
-          else if (obj.description) setAnalysis((s) => (s ? s + "\n" + obj.description : obj.description));
         } catch {}
       }
     } catch (err: any) {

@@ -14,11 +14,9 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "dotenv": "^17.2.3",
-    "form-data": "^4.0.4",
     "multer": "^2.0.2",
     "next": "15.5.4",
     "next-pwa": "^5.6.0",
-    "node-fetch": "^3.3.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "workbox-webpack-plugin": "^7.3.0"

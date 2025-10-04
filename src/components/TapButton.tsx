@@ -97,22 +97,10 @@ export function TapButton({ onAction, onLongPress }: TapButtonProps) {
         throw new Error(result.error || "Analysis failed")
       }
     } catch (error) {
-      console.log("Camera access failed, using fallback:", error)
-
-      // Fallback to simulated response
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const responses = [
-        "Two people ahead. Door slightly right. Clear path left.",
-        "Obstacle detected at 2 o'clock. Safe passage to your left.",
-        "Clear path ahead. No obstacles detected.",
-        "Stairs ahead. Handrail on your right.",
-        "Doorway detected. Handle on the left side.",
-        "Crowded area. Move slowly and stay to the right.",
-      ]
-
-      const response = responses[Math.floor(Math.random() * responses.length)]
-      onAction(response)
+      console.error("Camera access failed:", error)
+      onAction(
+        "Camera access unavailable. Please try again or use file upload."
+      )
     }
 
     setIsScanning(false)

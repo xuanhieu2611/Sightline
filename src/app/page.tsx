@@ -89,6 +89,16 @@ export default function Home() {
               <strong>Find:</strong> Look for specific objects like exits
             </p>
           </div>
+
+          {/* Test Analyzer Link */}
+          <div className="mt-6">
+            <a
+              href="/test-analyzer"
+              className="w-full h-12 bg-blue-600 text-white font-bold rounded-lg touch-target flex items-center justify-center hover:bg-blue-700"
+            >
+              🧪 Test Image Analyzer
+            </a>
+          </div>
         </div>
       </main>
 

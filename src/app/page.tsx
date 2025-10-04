@@ -1,114 +1,83 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { TapButton } from "@/components/TapButton"
-import { ReadButton } from "@/components/ReadButton"
-import { FindButton } from "@/components/FindButton"
-import { VoiceFeedback } from "@/components/VoiceFeedback"
-import { StatusIndicator } from "@/components/StatusIndicator"
+import { useRef, useState, useEffect } from "react";
+import { FiCamera } from "react-icons/fi";
+import DesktopCapture from "../components/DesktopCapture";
 
 export default function Home() {
-  const [isOnline, setIsOnline] = useState(true)
-  const [voiceMessage, setVoiceMessage] = useState("")
-  const [lastAction, setLastAction] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [showDesktopCam, setShowDesktopCam] = useState(false);
 
   useEffect(() => {
-    // Check online status
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
-
-    // Initial check
-    setIsOnline(navigator.onLine)
-
     return () => {
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
+      if (photo && photo.startsWith("blob:")) URL.revokeObjectURL(photo);
+    };
+  }, [photo]);
+
+  const isMobile = () => {
+    if (typeof navigator === "undefined") return false;
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  };
+
+  const openCamera = () => {
+    if (isMobile()) {
+      inputRef.current?.click(); // mobile: file input (camera)
+    } else {
+      setShowDesktopCam(true); // desktop: use getUserMedia modal
     }
-  }, [])
+  };
 
-  const handleAction = (action: string, message: string) => {
-    setLastAction(action)
-    setVoiceMessage(message)
+  const handleCaptureInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // prefer object URL for performance
+    if (photo && photo.startsWith("blob:")) URL.revokeObjectURL(photo);
+    setPhoto(URL.createObjectURL(file));
+  };
 
-    // Clear message after 3 seconds
-    setTimeout(() => {
-      setVoiceMessage("")
-    }, 3000)
-  }
-
-  const handleLongPress = () => {
-    if (lastAction) {
-      handleAction(lastAction, `Repeating: ${lastAction}`)
-    }
-  }
+  const handleCaptureDesktop = (blob: Blob) => {
+    if (photo && photo.startsWith("blob:")) URL.revokeObjectURL(photo);
+    setPhoto(URL.createObjectURL(blob));
+    setShowDesktopCam(false);
+  };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* Header */}
-      <header className="p-4 border-b border-white">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Sightline</h1>
-          <StatusIndicator isOnline={isOnline} />
-        </div>
-      </header>
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
+      <h1 className="text-7xl md:text-9xl font-extrabold mb-12 text-white">SightLine</h1>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
-        {/* Tap Button - Main Action */}
-        <div className="text-center">
-          <TapButton
-            onAction={(message) => handleAction("tap", message)}
-            onLongPress={handleLongPress}
-          />
-          <p className="mt-4 text-lg font-medium">Tap to scan surroundings</p>
-          <p className="text-sm text-gray-400 mt-2">
-            Long press to repeat last action
-          </p>
-        </div>
+      <button
+        onClick={openCamera}
+        type="button"
+        aria-label="Open camera"
+        className="w-40 h-40 md:w-56 md:h-56 bg-black text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-white hover:text-black hover:border-black active:scale-95 transition-transform focus:outline-none"
+      >
+        <FiCamera className="text-current" size={64} />
+      </button>
 
-        {/* Secondary Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-md">
-          <ReadButton onAction={(message) => handleAction("read", message)} />
-          <FindButton onAction={(message) => handleAction("find", message)} />
-        </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleCaptureInput}
+        className="hidden"
+      />
 
-        {/* Instructions */}
-        <div className="text-center max-w-md">
-          <h2 className="text-lg font-semibold mb-4">How to use:</h2>
-          <div className="space-y-2 text-sm">
-            <p>
-              <strong>Tap:</strong> Scan your surroundings for navigation help
-            </p>
-            <p>
-              <strong>Read:</strong> Point at signs or menus to read text
-            </p>
-            <p>
-              <strong>Find:</strong> Look for specific objects like exits
-            </p>
-          </div>
+      {showDesktopCam && (
+        <DesktopCapture
+          onCapture={handleCaptureDesktop}
+          onCancel={() => setShowDesktopCam(false)}
+        />
+      )}
 
-          {/* Test Analyzer Link */}
-          <div className="mt-6">
-            <a
-              href="/test-analyzer"
-              className="w-full h-12 bg-blue-600 text-white font-bold rounded-lg touch-target flex items-center justify-center hover:bg-blue-700"
-            >
-              🧪 Test Image Analyzer
-            </a>
-          </div>
-        </div>
-      </main>
-
-      {/* Voice Feedback */}
-      {voiceMessage && <VoiceFeedback message={voiceMessage} />}
-
-      {/* Footer */}
-      <footer className="p-4 border-t border-white text-center text-sm">
-        <p>Accessibility Assistant • Works Offline</p>
-      </footer>
+      {photo && (
+        <img
+          src={photo}
+          alt="Captured"
+          className="mt-6 w-full max-w-sm rounded-lg border border-white"
+        />
+      )}
     </div>
-  )
+  );
 }

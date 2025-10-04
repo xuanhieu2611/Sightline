@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Create PWA Icons</title>
+    <style>
+      body {
+        background: #000;
+        color: #fff;
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        text-align: center;
+      }
+      .icon-container {
+        display: inline-block;
+        margin: 10px;
+        text-align: center;
+      }
+      canvas {
+        border: 1px solid #333;
+        margin: 5px;
+      }
+      button {
+        background: #fff;
+        color: #000;
+        border: none;
+        padding: 10px 20px;
+        margin: 10px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .download-link {
+        display: block;
+        margin: 5px;
+        color: #00ff00;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sightline PWA Icon Generator</h1>
+    <p>Click "Generate Icons" to create all required PWA icons</p>
+
+    <button onclick="generateAllIcons()">Generate Icons</button>
+    <button onclick="downloadAllIcons()">Download All Icons</button>
+
+    <div id="icons-container"></div>
+
+    <script>
+      const iconSizes = [72, 96, 128, 144, 152, 192, 384, 512]
+      const icons = {}
+
+      function createIcon(size) {
+        const canvas = document.createElement("canvas")
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext("2d")
+
+        // Black background
+        ctx.fillStyle = "#000000"
+        ctx.fillRect(0, 0, size, size)
+
+        // White circle
+        ctx.fillStyle = "#ffffff"
+        ctx.beginPath()
+        ctx.arc(size / 2, size / 2, size / 3, 0, 2 * Math.PI)
+        ctx.fill()
+
+        // White border
+        ctx.strokeStyle = "#ffffff"
+        ctx.lineWidth = Math.max(2, size / 32)
+        ctx.stroke()
+
+        // Inner black circle
+        ctx.fillStyle = "#000000"
+        ctx.beginPath()
+        ctx.arc(size / 2, size / 2, size / 6, 0, 2 * Math.PI)
+        ctx.fill()
+
+        // White 'S' in center
+        ctx.fillStyle = "#ffffff"
+        ctx.font = `bold ${size / 8}px Arial`
+        ctx.textAlign = "center"
+        ctx.textBaseline = "middle"
+        ctx.fillText("S", size / 2, size / 2)
+
+        return canvas
+      }
+
+      function generateAllIcons() {
+        const container = document.getElementById("icons-container")
+        container.innerHTML = ""
+
+        iconSizes.forEach((size) => {
+          const canvas = createIcon(size)
+          icons[size] = canvas
+
+          const div = document.createElement("div")
+          div.className = "icon-container"
+          div.innerHTML = `
+                    <h3>${size}x${size}</h3>
+                    <canvas id="canvas-${size}" width="${size}" height="${size}"></canvas>
+                    <a id="download-${size}" class="download-link" href="#" download="icon-${size}x${size}.png">Download PNG</a>
+                `
+
+          const canvasElement = div.querySelector("canvas")
+          const ctx = canvasElement.getContext("2d")
+          ctx.drawImage(canvas, 0, 0)
+
+          // Set up download link
+          const downloadLink = div.querySelector("a")
+          downloadLink.href = canvas.toDataURL("image/png")
+
+          container.appendChild(div)
+        })
+      }
+
+      function downloadAllIcons() {
+        iconSizes.forEach((size) => {
+          if (icons[size]) {
+            const link = document.createElement("a")
+            link.href = icons[size].toDataURL("image/png")
+            link.download = `icon-${size}x${size}.png`
+            link.click()
+          }
+        })
+      }
+
+      // Auto-generate on load
+      window.onload = generateAllIcons
+    </script>
+  </body>
+</html>

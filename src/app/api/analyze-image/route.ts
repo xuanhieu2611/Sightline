@@ -1,8 +1,93 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 
-// Initialize Gemini AI
+// Initialize Gemini AI and model ONCE (outside the handler)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "")
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash-lite", // Faster, lighter model
+})
+
+// Optimized, concise prompt (maintains quality but reduces tokens)
+const PROMPT = `You are an assistive vision AI for blind users. Describe images clearly for text-to-speech.
+
+Priority order:
+1. Environment context (e.g., "You're in an elevator")
+2. Text/numbers/signs (read clearly)
+3. Spatial layout and key objects
+4. People (mention position only, e.g., "One person ahead")
+5. Safety concerns (stairs, obstacles)
+
+Style:
+- Natural, conversational tone
+- 3-5 sentences for simple scenes, more if complex
+- Use clear spatial references (left/right/above/below)
+- Mention colors/lighting when relevant
+
+Avoid:
+- "This image shows..." - describe directly
+- Detailed people descriptions (clothing, features)
+- Minor irrelevant details
+- If unclear/dark, say so directly`
+
+// Helper: Resize image if too large
+async function optimizeImage(
+  file: File
+): Promise<{ data: string; mimeType: string }> {
+  const MAX_SIZE = 1024 // Max width/height in pixels
+  const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB
+
+  // If file is small enough, use as-is
+  if (file.size < MAX_FILE_SIZE) {
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
+    return {
+      data: buffer.toString("base64"),
+      mimeType: file.type,
+    }
+  }
+
+  // Otherwise, resize
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")!
+
+    img.onload = () => {
+      let { width, height } = img
+
+      if (width > MAX_SIZE || height > MAX_SIZE) {
+        if (width > height) {
+          height = (height / width) * MAX_SIZE
+          width = MAX_SIZE
+        } else {
+          width = (width / height) * MAX_SIZE
+          height = MAX_SIZE
+        }
+      }
+
+      canvas.width = width
+      canvas.height = height
+      ctx.drawImage(img, 0, 0, width, height)
+
+      canvas.toBlob(
+        async (blob) => {
+          if (!blob) return reject(new Error("Failed to optimize image"))
+          const bytes = await blob.arrayBuffer()
+          const buffer = Buffer.from(bytes)
+          resolve({
+            data: buffer.toString("base64"),
+            mimeType: "image/jpeg",
+          })
+        },
+        "image/jpeg",
+        0.8
+      )
+    }
+
+    img.onerror = reject
+    img.src = URL.createObjectURL(file)
+  })
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,91 +95,101 @@ export async function POST(request: NextRequest) {
     const image = formData.get("image") as File
 
     if (!image) {
-      return NextResponse.json({ error: "No image provided" }, { status: 400 })
+      return new Response(JSON.stringify({ error: "No image provided" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
     }
 
-    // Convert image to base64
-    const bytes = await image.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    const base64Image = buffer.toString("base64")
+    // Optimize image (resize if needed)
+    const { data: base64Image, mimeType } = await optimizeImage(image)
 
-    // Initialize Gemini model - try the latest available model
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+    // Use streaming for faster perceived performance
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const result = await model.generateContentStream([
+            PROMPT,
+            {
+              inlineData: {
+                data: base64Image,
+                mimeType: mimeType,
+              },
+            },
+          ])
 
-    // Create the prompt for accessibility-focused description
-    const prompt = `## System Prompt
+          let fullText = ""
 
-You are an assistive vision AI designed to help blind and low-vision users understand their surroundings through detailed audio descriptions. Your descriptions will be read aloud via text-to-speech.
+          for await (const chunk of result.stream) {
+            const chunkText = chunk.text()
+            fullText += chunkText
 
-## Instructions
+            // Send chunk to client
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  chunk: chunkText,
+                  done: false,
+                }) + "\n"
+              )
+            )
+          }
 
-Analyze the image and provide a clear, comprehensive description following these guidelines:
+          // Send final message
+          controller.enqueue(
+            encoder.encode(
+              JSON.stringify({
+                success: true,
+                description: fullText,
+                timestamp: new Date().toISOString(),
+                done: true,
+              }) + "\n"
+            )
+          )
 
-### Structure & Priority
-1. **Start with context** - What type of space or environment is this? (e.g., "You're in an elevator" or "This is a waterfall in a forest")
-2. **Key actionable information first** - Text, numbers, signs, controls, or navigation info (e.g., "The display shows floor 3")
-3. **Spatial layout** - General layout and important objects/features
-4. **People if present** - Mention number and general position only (e.g., "One person is standing in front of you"), avoid detailed physical descriptions
-5. **Additional context** - Other relevant environmental details, colors, lighting
-6. **Safety information** - Obstacles, hazards, or concerns if relevant
-
-### Tone & Style
-- Use natural, conversational language as if describing the scene to a friend
-- Be concise but thorough - aim for 3-5 sentences for simple scenes, more for complex ones
-- Avoid overly technical or artistic language
-- Use clear spatial references (left, right, foreground, background, above, below)
-- Describe colors and lighting conditions when relevant
-
-### What to Avoid
-- Don't say "This image shows..." or "I can see..." - just describe directly
-- Don't be overly poetic or use excessive metaphors
-- Don't make assumptions about things you can't see clearly
-- **Don't provide detailed physical descriptions of people** (hair style, clothing brands, facial features) - just mention their presence and general position
-- Don't describe if the image is too blurry, dark, or unclear to provide useful information - instead say "The image is too dark/unclear to provide a reliable description"
-- Don't describe every minor detail - focus on what's useful for understanding and navigation
-
-### Special Scenarios
-- **If text is present**: Read it clearly and note its location/purpose
-- **If it's a menu or sign**: Prioritize reading the text content
-- **If there's potential danger**: Mention it early (e.g., "There are stairs directly ahead")
-- **If the scene is empty or minimal**: Be honest and brief (e.g., "This shows a plain white wall with no notable features")
-    `
-
-    // Generate content with the image
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Image,
-          mimeType: image.type,
-        },
+          controller.close()
+        } catch (error) {
+          controller.enqueue(
+            encoder.encode(
+              JSON.stringify({
+                error: "Failed to analyze image",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                done: true,
+              }) + "\n"
+            )
+          )
+          controller.close()
+        }
       },
-    ])
+    })
 
-    const response = await result.response
-    const description = response.text()
-
-    return NextResponse.json({
-      success: true,
-      description: description,
-      timestamp: new Date().toISOString(),
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/json",
+        "Transfer-Encoding": "chunked",
+      },
     })
   } catch (error) {
     console.error("Error analyzing image:", error)
 
-    return NextResponse.json(
-      {
+    return new Response(
+      JSON.stringify({
         error: "Failed to analyze image",
         details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
     )
   }
 }
 
 // Handle OPTIONS request for CORS
 export async function OPTIONS() {
-  return new NextResponse(null, {
+  return new Response(null, {
     status: 200,
     headers: {
       "Access-Control-Allow-Origin": "*",

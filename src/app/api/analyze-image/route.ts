@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes)
     const base64Image = buffer.toString("base64")
 
-    // Initialize Gemini model
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+    // Initialize Gemini model - try the latest available model
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     // Create the prompt for accessibility-focused description
     const prompt = `

@@ -6,14 +6,15 @@ import DesktopCapture from "../components/DesktopCapture";
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [photo, setPhoto] = useState<string | null>(null);
   const [showDesktopCam, setShowDesktopCam] = useState(false);
+  const [analysis, setAnalysis] = useState<string>("");
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     return () => {
-      if (photo && photo.startsWith("blob:")) URL.revokeObjectURL(photo);
+      // nothing to revoke here since we no longer create object URLs for preview
     };
-  }, [photo]);
+  }, []);
 
   const isMobile = () => {
     if (typeof navigator === "undefined") return false;
@@ -28,18 +29,90 @@ export default function Home() {
     }
   };
 
+  // send blob to AI and show streamed response
+  const analyzeBlob = async (blob: Blob) => {
+    setAnalysis("");
+    setAnalyzing(true);
+
+    try {
+      const form = new FormData();
+      form.append("image", blob, "photo.jpg");
+
+      const res = await fetch("/api/analyze-image", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        setAnalysis(`Server error: ${res.status} ${errText}`);
+        setAnalyzing(false);
+        return;
+      }
+
+      if (!res.body) {
+        // fallback: parse full json
+        const json = await res.json().catch(() => null);
+        setAnalysis(json?.description ?? "No description returned");
+        setAnalyzing(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const obj = JSON.parse(line);
+            // only append incremental chunks; ignore final `description`
+            if (obj.chunk) {
+              setAnalysis((s) => s + obj.chunk);
+            } else if (obj.error) {
+              setAnalysis(`Error: ${obj.error}`);
+            }
+          } catch (e) {
+            // ignore parse errors for partial lines
+          }
+        }
+      }
+
+      // flush any remaining buffered line (only handle chunk, ignore description)
+      if (buffer.trim()) {
+        try {
+          const obj = JSON.parse(buffer);
+          if (obj.chunk) setAnalysis((s) => s + obj.chunk);
+        } catch {}
+      }
+    } catch (err: any) {
+      setAnalysis(`Capture/analysis failed: ${err?.message ?? String(err)}`);
+    } finally {
+      setAnalyzing(false);
+      setShowDesktopCam(false);
+    }
+  };
+
   const handleCaptureInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // prefer object URL for performance
-    if (photo && photo.startsWith("blob:")) URL.revokeObjectURL(photo);
-    setPhoto(URL.createObjectURL(file));
+    // mobile: clear input and immediately start analysis (no camera UI to hide)
+    e.currentTarget.value = "";
+    analyzeBlob(file);
   };
 
   const handleCaptureDesktop = (blob: Blob) => {
-    if (photo && photo.startsWith("blob:")) URL.revokeObjectURL(photo);
-    setPhoto(URL.createObjectURL(blob));
+    // hide the desktop camera UI immediately when a photo is taken
     setShowDesktopCam(false);
+    // then send the blob to analysis
+    analyzeBlob(blob);
   };
 
   return (
@@ -71,13 +144,17 @@ export default function Home() {
         />
       )}
 
-      {photo && (
-        <img
-          src={photo}
-          alt="Captured"
-          className="mt-6 w-full max-w-sm rounded-lg border border-white"
-        />
-      )}
+      <div className="mt-6 w-full max-w-lg">
+        {analyzing ? (
+          <div className="text-center text-sm text-gray-300">Analyzing image…</div>
+        ) : (
+          analysis && (
+            <div className="prose text-white bg-gray-900/40 p-4 rounded-md whitespace-pre-wrap">
+              {analysis}
+            </div>
+          )
+        )}
+      </div>
     </div>
   );
 }

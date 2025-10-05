@@ -16,6 +16,7 @@ export default function AnalysisBox({ blob }: Props) {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null)
   const savedAudioBlobRef = useRef<Blob | null>(null) // Store the complete audio for replay
   const allAudioChunksRef = useRef<Blob[]>([]) // Store all audio chunks
+  const audioUnlockedRef = useRef(false) // Track if audio is unlocked
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -34,8 +35,16 @@ export default function AnalysisBox({ blob }: Props) {
     const audioBlob = audioQueueRef.current.shift()!
     try {
       const audioUrl = URL.createObjectURL(audioBlob)
-      const audio = new Audio(audioUrl)
-      currentAudioRef.current = audio
+
+      // Reuse the same audio element to avoid Safari blocking
+      let audio = currentAudioRef.current
+      if (!audio) {
+        audio = new Audio()
+        currentAudioRef.current = audio
+      }
+
+      audio.src = audioUrl
+      audio.load() // Important: load the new source
 
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl)
@@ -43,7 +52,8 @@ export default function AnalysisBox({ blob }: Props) {
         setIsPlaying(false)
         playNextAudio()
       }
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.error("Audio playback error:", e)
         URL.revokeObjectURL(audioUrl)
         isPlayingRef.current = false
         setIsPlaying(false)
@@ -77,8 +87,16 @@ export default function AnalysisBox({ blob }: Props) {
     // Play the saved complete audio blob
     try {
       const audioUrl = URL.createObjectURL(savedAudioBlobRef.current)
-      const audio = new Audio(audioUrl)
-      currentAudioRef.current = audio
+
+      // Reuse the same audio element
+      let audio = currentAudioRef.current
+      if (!audio) {
+        audio = new Audio()
+        currentAudioRef.current = audio
+      }
+
+      audio.src = audioUrl
+      audio.load()
 
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl)
@@ -148,6 +166,44 @@ export default function AnalysisBox({ blob }: Props) {
       setIsPlaying(false)
       savedAudioBlobRef.current = null
       allAudioChunksRef.current = [] // Reset audio chunks
+
+      // CRITICAL: Unlock audio playback in Safari by initializing audio in user gesture context
+      // This must happen within the user gesture context (photo capture)
+      if (!audioUnlockedRef.current) {
+        try {
+          // Resume AudioContext if suspended
+          if (audioContextRef.current?.state === "suspended") {
+            await audioContextRef.current.resume()
+            console.log("AudioContext resumed for Safari autoplay")
+          }
+        } catch (err) {
+          console.warn("Failed to resume AudioContext:", err)
+        }
+
+        // Create and initialize the audio element during user gesture
+        try {
+          if (!currentAudioRef.current) {
+            currentAudioRef.current = new Audio()
+          }
+
+          // Play a silent audio to unlock Safari's audio system
+          const silentAudio = currentAudioRef.current
+          silentAudio.src =
+            "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAA4S1HNp3AAAAAAAAAAAAAAAAAAAAAP/7kGQAD/AAAGkAAAAIAAANIAAAAQAAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ=="
+          silentAudio.volume = 0.01 // Very low volume instead of 0
+          silentAudio.load()
+
+          await silentAudio.play()
+          console.log("Audio element unlocked for Safari - ready for autoplay")
+          audioUnlockedRef.current = true
+
+          // Immediately pause it so it's ready for the real audio
+          silentAudio.pause()
+          silentAudio.currentTime = 0
+        } catch (err) {
+          console.warn("Failed to unlock audio:", err)
+        }
+      }
 
       try {
         const form = new FormData()
@@ -297,6 +353,8 @@ export default function AnalysisBox({ blob }: Props) {
       audioQueueRef.current = []
       isPlayingRef.current = false
       setIsPlaying(false)
+      // Reset unlock flag for next photo capture
+      audioUnlockedRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blob])

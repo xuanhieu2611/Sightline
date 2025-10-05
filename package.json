@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "dev": "next dev",
+    "dev:turbo": "next dev --turbopack",
+    "build": "next build",
     "start": "next start",
+    "start:mobile": "next start -H 0.0.0.0",
     "lint": "eslint",
-    "pwa:build": "next build && next export",
-    "pwa:test": "npm run build && npm start",
+    "pwa:test": "npm run build && npm run start:mobile",
     "icons:generate": "node scripts/generate-icons.js"
   },
   "dependencies": {

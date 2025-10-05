@@ -1,194 +1,248 @@
-# Sightline - Accessibility Assistant PWA
+<div align="center">
 
-A Progressive Web App (PWA) designed to provide AI-powered accessibility assistance for navigation and reading assistance.
+# 🔭 Sightline
 
-## Features
+**AI-Powered Accessibility Assistant for the Visually Impaired**
 
-### Core User Flows
+[![Live Demo](https://img.shields.io/badge/demo-live-success?style=for-the-badge&logo=vercel)](https://sightline-xi.vercel.app/describe)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](./LICENSE)
+[![PWA Ready](https://img.shields.io/badge/PWA-ready-blueviolet?style=for-the-badge)](https://web.dev/pwa/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 
-1. **Tap** - Scan surroundings for navigation assistance
+[Try Live Demo](https://sightline-xi.vercel.app/describe) · [Report Bug](https://github.com/yourusername/Sightline/issues) · [Request Feature](https://github.com/yourusername/Sightline/issues)
 
-   - Audio feedback with spatial awareness
-   - Haptic feedback for touch interactions
-   - Contextual responses like "Two people ahead. Door slightly right. Clear path left."
+</div>
 
-2. **Read** - OCR functionality for signs and menus
+---
 
-   - Point camera at text to read
-   - Short headline first, then "Read all?" option
+## 🌟 What is Sightline?
+
+Sightline is a Progressive Web App (PWA) that transforms your smartphone into an AI-powered vision assistant. Designed specifically for people with visual impairments, Sightline helps you navigate the world with confidence by providing real-time audio descriptions of your surroundings.
+
+### 💡 The Problem We're Solving
+
+For millions of people with visual impairments worldwide, everyday tasks like navigating unfamiliar spaces, reading signs and menus, or finding specific objects can be challenging and stressful. Traditional accessibility tools often require expensive specialized hardware or complex setups that aren't practical for daily use.
+
+**Sightline changes that.**
+
+We believe accessibility should be:
+
+- ✅ **Available** - Works on any modern smartphone, no special hardware needed
+- ✅ **Instant** - Get immediate audio feedback about your surroundings
+- ✅ **Private** - Your data stays secure, nothing is stored without permission
+- ✅ **Free** - Accessibility shouldn't come with a price tag
+
+### 🎯 How It Works
+
+Sightline combines cutting-edge AI with thoughtful UX design to create three core experiences:
+
+1. **👆 Describe** - Point your camera and get instant audio descriptions
+
+   - "Two people ahead. Door slightly right. Clear path left."
+   - Perfect for navigating unfamiliar spaces
+
+2. **📖 Read** (Coming Soon) - OCR functionality for signs and menus
+
+   - Point at text to have it read aloud
    - Works offline with cached models
 
-3. **Find** - Object detection for specific targets
-   - Choose target (Exit, Restroom, Elevator, etc.)
-   - Continuous scanning with updates
-   - Responses like "Exit sign, 1 o'clock, near"
+3. **🔍 Live** - Continuous real-time analysis
+   - Live scanning with ongoing updates
+   - Spatial awareness and object detection
 
-### UX Principles
+---
 
-- **One giant action button** - Tap to act, long-press to repeat last action
-- **Voice lines < 3s** - Never spam audio
-- **High contrast design** - Black background, white text, 20+ pt fonts
-- **Large hit areas** - 60px minimum touch targets
-- **Works offline** - History + basic OCR functionality
-- **Privacy-first** - No storage unless user saves
+## ✨ Features
 
-## PWA Features
+### 🎨 Designed for Accessibility First
 
-### Manifest Requirements ✅
+- **High Contrast UI** - Black background, white text, ultra-readable fonts
+- **Large Touch Targets** - 60px minimum for easy interaction
+- **Voice Feedback** - Every action has audio confirmation
+- **Haptic Response** - Feel the app respond to your touch
+- **Works Offline** - Core functionality available without internet
 
-- `manifest.json` with name, short_name, icons, theme_color
-- `display: "standalone"` for app-like experience
-- `start_url: "/"` for proper launching
+### 🚀 Progressive Web App
 
-### Service Worker ✅
+- **Install Like an App** - Add to home screen on iOS and Android
+- **Lightning Fast** - Cached for instant loading
+- **Offline Capable** - Access history without connection
+- **Always Up-to-Date** - No app store updates needed
 
-- Caches shell and offline page
-- Caches last results for offline access
-- Background sync when connection restored
+### 🤖 Powered by AI
 
-### iOS Optimizations ✅
+- **Google Gemini AI** - State-of-the-art vision understanding
+- **Real-time Analysis** - Instant image processing
+- **Natural Language** - Descriptions that actually make sense
+- **Privacy Focused** - Images analyzed in real-time, never stored
 
-- Viewport meta tag for proper scaling
-- Apple touch icon
-- Status bar style configuration
-- "Add to Home Screen" instructions
+---
 
-### Lighthouse PWA Score
+## 🛠️ Tech Stack
 
-- Target: ≥ 90
-- Installable, offline-capable, fast loading
+Sightline is built with modern, production-ready technologies:
 
-## Development
+| Technology                                                                            | Purpose                            |
+| ------------------------------------------------------------------------------------- | ---------------------------------- |
+| **[Next.js 14](https://nextjs.org/)**                                                 | React framework with App Router    |
+| **[TypeScript](https://www.typescriptlang.org/)**                                     | Type-safe development              |
+| **[Google Gemini AI](https://ai.google.dev/)**                                        | Vision and language understanding  |
+| **[PWA](https://web.dev/pwa/)**                                                       | Offline-first, installable web app |
+| **[Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API)** | Text-to-speech output              |
+| **[MediaDevices API](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices)** | Camera access                      |
+| **[Vercel](https://vercel.com/)**                                                     | Deployment and hosting             |
 
-### Prerequisites
+---
 
-- Node.js 18+
-- npm or yarn
+## 🚀 Quick Start
 
-### Installation
+### Try It Now
+
+Visit **[sightline-xi.vercel.app/describe](https://sightline-xi.vercel.app/describe)** to try Sightline instantly in your browser!
+
+For the best experience:
+
+1. Open the link on your smartphone
+2. Tap "Add to Home Screen" for app-like experience
+3. Allow camera and audio permissions
+4. Start exploring!
+
+### Run Locally
+
+Want to contribute or run your own instance?
 
 ```bash
+# Clone the repository
+git clone https://github.com/yourusername/Sightline.git
+cd Sightline
+
+# Install dependencies
 npm install
-```
 
-### Development Server
+# Set up environment (optional - for Gemini API)
+echo "GEMINI_API_KEY=your_key_here" > .env.local
 
-```bash
+# Start development server
 npm run dev
 ```
+
+Visit `http://localhost:3000` to see your local instance.
 
 ### Build for Production
 
 ```bash
+# Create optimized production build
 npm run build
+
+# Start production server
 npm start
 ```
 
-### PWA Testing
+---
 
-1. Build the application: `npm run build`
-2. Start production server: `npm start`
-3. Open Chrome DevTools
-4. Go to Lighthouse tab
-5. Run PWA audit
-6. Target score: ≥ 90
+## 📱 Installation Guide
 
-### Icon Generation
+### iOS (Safari)
 
-Visit `/icons/create-icons.html` to generate proper PWA icons.
+1. Visit [sightline-xi.vercel.app/describe](https://sightline-xi.vercel.app/describe)
+2. Tap the Share button (square with arrow)
+3. Scroll down and tap "Add to Home Screen"
+4. Tap "Add" to confirm
 
-## AI Integration
+### Android (Chrome)
 
-### Gemini API Setup
+1. Visit [sightline-xi.vercel.app/describe](https://sightline-xi.vercel.app/describe)
+2. Tap the three-dot menu
+3. Select "Add to Home screen"
+4. Tap "Install" or "Add"
 
-The app uses Google's Gemini AI for real-time image analysis:
+### Desktop (Chrome/Edge)
 
-1. **Get API Key**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. **Set Environment**: Create `.env.local` with your API key
-3. **Test Integration**: Visit `/test-analyzer` to test image analysis
+1. Visit [sightline-xi.vercel.app/describe](https://sightline-xi.vercel.app/describe)
+2. Look for the install icon in the address bar
+3. Click "Install" to add as desktop app
 
-### API Features
+---
 
-- **Real-time Analysis**: Camera capture with instant AI analysis
-- **Accessibility Focus**: Descriptions optimized for navigation assistance
-- **Error Handling**: Graceful fallbacks when API is unavailable
-- **Privacy**: Images processed in real-time, not stored
+## 🎯 Usage
 
-## Architecture
+### Basic Flow
 
-### Components
+1. **Open the App** - Launch Sightline from your home screen
+2. **Grant Permissions** - Allow camera and microphone access
+3. **Point Your Camera** - Aim at what you want described
+4. **Tap the Button** - Large center button to capture and analyze
+5. **Listen** - Audio description plays automatically
 
-- `TapButton` - Main scanning functionality
-- `ReadButton` - OCR for text reading
-- `FindButton` - Object detection and targeting
-- `VoiceFeedback` - Text-to-speech output
-- `StatusIndicator` - Online/offline status
+### Tips for Best Results
 
-### Service Worker
+- 📸 **Good Lighting** - Works best in well-lit environments
+- 🎯 **Steady Camera** - Hold phone still when capturing
+- 🔊 **Volume Up** - Ensure phone volume is turned up
+- 📶 **Online First** - AI features require internet connection
+- 💾 **Offline Access** - Previous analyses available without internet
 
-- Caches essential files for offline use
-- Handles background sync
-- Provides offline fallback page
+---
 
-### Styling
+## 🔐 Privacy & Security
 
-- High contrast theme (black/white)
-- Large touch targets (60px minimum)
-- Accessible typography (20+ pt fonts)
-- Responsive design for mobile-first
+Your privacy is our top priority:
 
-## Accessibility Features
+- 🚫 **No Data Collection** - We don't collect or store your data
+- 🔒 **Secure by Default** - All connections use HTTPS
+- 🖼️ **No Image Storage** - Photos are analyzed in real-time and discarded
+- 🎤 **Local Processing** - Speech synthesis happens on your device
+- 📵 **Offline Capable** - Core features work without sending data
 
-1. **High Contrast Design** - Black/white theme for visual accessibility
-2. **Large Touch Targets** - 60px minimum for motor accessibility
-3. **Voice Feedback** - Text-to-speech for all actions
-4. **Haptic Feedback** - Vibration for touch interactions
-5. **Keyboard Navigation** - Full keyboard support
-6. **Screen Reader Support** - Proper ARIA labels and semantic HTML
+---
 
-## Browser Support
+## 🗺️ Roadmap
 
-- Chrome/Edge (full PWA support)
-- Safari (iOS PWA support)
-- Firefox (basic PWA support)
+We're constantly improving Sightline. Here's what's coming:
 
-## Deployment
+- [ ] **OCR Text Reading** - Read signs, menus, and documents
+- [ ] **Object Detection** - Find specific items (exits, restrooms, etc.)
+- [ ] **Multi-language Support** - Support for 50+ languages
+- [ ] **Spatial Audio** - 3D audio cues for better navigation
+- [ ] **Customizable Voice** - Choose your preferred voice and speed
+- [ ] **History & Bookmarks** - Save and revisit important descriptions
+- [ ] **Offline AI Models** - Basic AI capabilities without internet
 
-### Vercel (Recommended)
+---
 
-```bash
-npm install -g vercel
-vercel --prod
-```
+## 🙏 Acknowledgments
 
-### Netlify
+Sightline wouldn't be possible without:
 
-```bash
-npm run build
-# Deploy dist folder to Netlify
-```
+- **[Google Gemini AI](https://ai.google.dev/)** - For powerful vision AI capabilities
+- **[Next.js Team](https://nextjs.org/)** - For an amazing React framework
+- **[Vercel](https://vercel.com/)** - For seamless deployment
+- **Accessibility Community** - For invaluable feedback and testing
 
-### Manual Deployment
+Special thanks to all the beta testers who helped make Sightline better!
 
-1. Run `npm run build`
-2. Upload the `.next` folder to your server
-3. Configure server for Next.js
+---
 
-## Privacy & Security
+## 📄 License
 
-- **No data collection** - All processing happens locally
-- **Offline-first** - Works without internet connection
-- **No tracking** - No analytics or user tracking
-- **Secure** - HTTPS required for PWA features
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
 
-## Contributing
+---
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test PWA functionality
-5. Submit a pull request
+## 💬 Get in Touch
 
-## License
+Have questions, suggestions, or just want to say hi?
 
-MIT License - see LICENSE file for details.
+- 🐛 [Report a Bug](https://github.com/yourusername/Sightline/issues)
+- 💡 [Request a Feature](https://github.com/yourusername/Sightline/issues)
+- ⭐ [Star on GitHub](https://github.com/yourusername/Sightline)
+
+---
+
+<div align="center">
+
+**Made with ❤️ for accessibility**
+
+[Try Sightline Now](https://sightline-xi.vercel.app/describe) · [Learn More](https://github.com/yourusername/Sightline)
+
+</div>

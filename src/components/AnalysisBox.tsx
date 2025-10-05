@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from "react"
 
 type Props = {
   blob: Blob | null
+  isProcessingOrPlayingAudio: boolean
+  setIsProcessionOrPlayingAudio: (value: boolean) => void
 }
 
-export default function AnalysisBox({ blob }: Props) {
+export default function AnalysisBox({ blob, isProcessingOrPlayingAudio, setIsProcessionOrPlayingAudio }: Props) {
   const [analyzing, setAnalyzing] = useState(false)
   const [description, setDescription] = useState("")
   const [isPlaying, setIsPlaying] = useState(false)
@@ -31,6 +33,7 @@ export default function AnalysisBox({ blob }: Props) {
     if (isPlayingRef.current || audioQueueRef.current.length === 0) return
     isPlayingRef.current = true
     setIsPlaying(true)
+    setIsProcessionOrPlayingAudio(true)
     const audioBlob = audioQueueRef.current.shift()!
     try {
       const audioUrl = URL.createObjectURL(audioBlob)
@@ -41,12 +44,19 @@ export default function AnalysisBox({ blob }: Props) {
         URL.revokeObjectURL(audioUrl)
         isPlayingRef.current = false
         setIsPlaying(false)
+        // Check if queue is empty before allowing new captures
+        if (audioQueueRef.current.length === 0) {
+          setIsProcessionOrPlayingAudio(false)
+        }
         playNextAudio()
       }
       audio.onerror = () => {
         URL.revokeObjectURL(audioUrl)
         isPlayingRef.current = false
         setIsPlaying(false)
+        if (audioQueueRef.current.length === 0) {
+          setIsProcessionOrPlayingAudio(false)
+        }
         playNextAudio()
       }
       await audio.play()
@@ -54,6 +64,9 @@ export default function AnalysisBox({ blob }: Props) {
       console.error("Audio playback error:", err)
       isPlayingRef.current = false
       setIsPlaying(false)
+      if (audioQueueRef.current.length === 0) {
+        setIsProcessionOrPlayingAudio(false)
+      }
       playNextAudio()
     }
   }
@@ -66,6 +79,7 @@ export default function AnalysisBox({ blob }: Props) {
     isPlayingRef.current = false
     setIsPlaying(false)
     audioQueueRef.current = []
+    setIsProcessionOrPlayingAudio(false)
   }
 
   const replayAudio = async () => {
@@ -84,20 +98,24 @@ export default function AnalysisBox({ blob }: Props) {
         URL.revokeObjectURL(audioUrl)
         isPlayingRef.current = false
         setIsPlaying(false)
+        setIsProcessionOrPlayingAudio(false)
       }
       audio.onerror = () => {
         URL.revokeObjectURL(audioUrl)
         isPlayingRef.current = false
         setIsPlaying(false)
+        setIsProcessionOrPlayingAudio(false)
       }
 
       isPlayingRef.current = true
       setIsPlaying(true)
+      setIsProcessionOrPlayingAudio(true)
       await audio.play()
     } catch (err) {
       console.error("Replay audio error:", err)
       isPlayingRef.current = false
       setIsPlaying(false)
+      setIsProcessionOrPlayingAudio(false)
     }
   }
 
@@ -165,6 +183,7 @@ export default function AnalysisBox({ blob }: Props) {
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
     ;(async () => {
       setAnalyzing(true)
+      setIsProcessionOrPlayingAudio(true)
       setDescription("")
       audioQueueRef.current = []
       isPlayingRef.current = false
@@ -340,6 +359,7 @@ export default function AnalysisBox({ blob }: Props) {
       audioQueueRef.current = []
       isPlayingRef.current = false
       setIsPlaying(false)
+      setIsProcessionOrPlayingAudio(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blob])

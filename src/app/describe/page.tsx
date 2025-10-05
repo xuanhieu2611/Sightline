@@ -35,14 +35,26 @@ export default function DescribePage() {
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md flex flex-col items-center">
         {!capturedBlob ? (
-          <button
-            onClick={() => setCameraOpen(true)}
-            type="button"
-            aria-label="Open camera"
-            className="w-40 h-40 md:w-56 md:h-56 bg-black text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white active:scale-95 transition-transform focus:outline-none"
-          >
-            <FiCamera size={64} />
-          </button>
+          <div className="flex flex-col items-center">
+            <button
+              onClick={() => !isProcessingOrPlayingAudio && setCameraOpen(true)}
+              type="button"
+              aria-label="Open camera"
+              disabled={isProcessingOrPlayingAudio}
+              className={`w-40 h-40 md:w-56 md:h-56 bg-black text-white rounded-full flex items-center justify-center shadow-lg border-2 transition-transform focus:outline-none ${
+                isProcessingOrPlayingAudio
+                  ? "border-gray-600 opacity-50 cursor-not-allowed"
+                  : "border-white active:scale-95"
+              }`}
+            >
+              <FiCamera size={64} />
+            </button>
+            {isProcessingOrPlayingAudio && (
+              <p className="mt-4 text-gray-400 text-sm text-center">
+                Audio is playing... Please wait
+              </p>
+            )}
+          </div>
         ) : (
           <div className="w-full space-y-6">
             <div className="flex justify-center">

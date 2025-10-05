@@ -1,3 +1,4 @@
+"use client"
 import React, { useEffect, useRef } from "react";
 import DesktopCapture from "./DesktopCapture";
 import MobileCapture, { MobileCaptureHandle } from "./MobileCapture";

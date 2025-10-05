@@ -8,7 +8,6 @@ export default function DescribePage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [lastDescription, setLastDescription] = useState("")
@@ -28,11 +27,9 @@ export default function DescribePage() {
   // Auto-start camera on page load
   useEffect(() => {
     startCamera()
-    startMonitoring()
 
     return () => {
       stopCamera()
-      stopMonitoring()
       // Cancel any speech synthesis
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel()
@@ -76,6 +73,11 @@ export default function DescribePage() {
 
         videoRef.current.onloadedmetadata = () => {
           console.log("Video ready")
+          // Wait for camera to stabilize before first capture
+          setTimeout(() => {
+            console.log("Camera stabilized, starting first analysis")
+            captureAndAnalyze()
+          }, 2000) // 2 second delay to allow camera to focus
         }
       }
     } catch (error) {
@@ -92,48 +94,15 @@ export default function DescribePage() {
     }
   }
 
-  // Stop monitoring
-  const stopMonitoring = () => {
-    console.log("🔴 STOPPING MONITORING")
-    setIsMonitoring(false)
-
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-      console.log("Interval cleared")
-    }
-  }
-
-  // Start monitoring
-  const startMonitoring = () => {
-    console.log("🟢 STARTING MONITORING")
-    setIsMonitoring(true)
-
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-
-    // Start new interval
-    intervalRef.current = setInterval(() => {
-      console.log("⏰ INTERVAL TRIGGERED - 10 seconds passed")
-      console.log("Current state - isAnalyzing:", isAnalyzing)
-
-      if (!isAnalyzing) {
-        console.log("✅ Starting auto capture...")
-        captureAndAnalyze()
-      } else {
-        console.log("❌ Skipping - analyzing")
-      }
-    }, 10000)
-
-    console.log("Interval created:", intervalRef.current)
+  // Set monitoring state (for UI display)
+  const setMonitoringState = (monitoring: boolean) => {
+    console.log(monitoring ? "🟢 MONITORING ACTIVE" : "🔴 MONITORING STOPPED")
+    setIsMonitoring(monitoring)
   }
 
   // Capture image and analyze
   const captureAndAnalyze = async () => {
-    console.log("📸 Starting capture and analyze (AUTO)")
+    console.log("📸 Starting capture and analyze")
 
     if (!videoRef.current || !canvasRef.current || isAnalyzing) {
       console.log(
@@ -157,6 +126,7 @@ export default function DescribePage() {
     }
 
     setIsAnalyzing(true)
+    setMonitoringState(true)
     console.log("🔄 Setting analyzing to true")
 
     try {
@@ -230,6 +200,17 @@ export default function DescribePage() {
       utterance.rate = 0.9
       utterance.pitch = 1
       utterance.volume = 1
+
+      // Add event listener for when speech ends
+      utterance.onend = () => {
+        console.log("🔊 Speech ended, starting next analysis")
+        // Start next analysis when TTS is done
+        setTimeout(() => {
+          if (!isAnalyzing) {
+            captureAndAnalyze()
+          }
+        }, 500) // Small delay to ensure smooth transition
+      }
 
       speechSynthesis.speak(utterance)
     }
@@ -334,7 +315,7 @@ export default function DescribePage() {
 
               {/* Status Overlay */}
               <div className="absolute top-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-sm">
-                <span className="text-green-400">🔴 Live Monitoring</span>
+                <span className="text-green-400">🔴 Live Analysis</span>
                 {isAnalyzing && (
                   <span className="text-blue-400 ml-2">Analyzing...</span>
                 )}

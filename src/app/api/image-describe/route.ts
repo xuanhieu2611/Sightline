@@ -69,14 +69,8 @@ async function textToSpeechStream(text: string): Promise<Uint8Array | null> {
         },
         body: JSON.stringify({
           text: text,
-          model_id: "eleven_turbo_v2_5",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.8,
-            style: 0.2,
-            use_speaker_boost: true,
-          },
-          speed: 2.0,
+          model_id: "eleven_flash_v2_5", // Faster model
+          speed: 1.5, // Optimized speed
         }),
       }
     )
@@ -86,8 +80,34 @@ async function textToSpeechStream(text: string): Promise<Uint8Array | null> {
       return null
     }
 
-    const audioBuffer = await response.arrayBuffer()
-    return new Uint8Array(audioBuffer)
+    // Collect all audio chunks into one buffer for smooth playback
+    const reader = response.body?.getReader()
+    if (!reader) {
+      const audioBuffer = await response.arrayBuffer()
+      return new Uint8Array(audioBuffer)
+    }
+
+    const chunks: Uint8Array[] = []
+    let totalLength = 0
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (value) {
+        chunks.push(value)
+        totalLength += value.length
+      }
+    }
+
+    // Concatenate all chunks into a single buffer
+    const completeAudio = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      completeAudio.set(chunk, offset)
+      offset += chunk.length
+    }
+
+    return completeAudio
   } catch (error) {
     console.error("ElevenLabs TTS error:", error)
     return null
@@ -203,41 +223,69 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Convert image to base64
-    const imageBuffer = await imageFile.arrayBuffer()
-    const imageBase64 = Buffer.from(imageBuffer).toString("base64")
+    // Optimize image (resize if too large)
+    const { data: imageBase64, mimeType } = await optimizeImage(imageFile)
     const imageData = {
       inlineData: {
         data: imageBase64,
-        mimeType: imageFile.type,
+        mimeType: mimeType,
       },
     }
 
     // Generate content with streaming
     const result = await model.generateContentStream([PROMPT, imageData])
 
-    let fullText = ""
     const encoder = new TextEncoder()
 
-    // Create a readable stream
+    // Create a readable stream with sentence buffering
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          let fullText = ""
+          let sentenceBuffer = ""
+          const MIN_WORDS_FOR_TTS = 8 // Send to TTS after this many words
+
           for await (const chunk of result.stream) {
             const chunkText = chunk.text()
             fullText += chunkText
+            sentenceBuffer += chunkText
 
-            // Send text chunk
+            // Send text chunk immediately for display
             controller.enqueue(
               encoder.encode(
                 JSON.stringify({ type: "text", chunk: chunkText }) + "\n"
               )
             )
 
-            // Convert text to speech and send audio
-            if (chunkText.trim()) {
-              const audioBuffer = await textToSpeechStream(chunkText)
-              if (audioBuffer) {
+            // Extract complete sentences
+            const { sentences, remaining } = extractSentences(sentenceBuffer)
+            sentenceBuffer = remaining
+
+            // Convert complete sentences to audio
+            for (const sentence of sentences) {
+              if (sentence.trim()) {
+                const audioBuffer = await textToSpeechStream(sentence)
+                if (audioBuffer && audioBuffer.length > 0) {
+                  const audioBase64 =
+                    Buffer.from(audioBuffer).toString("base64")
+                  controller.enqueue(
+                    encoder.encode(
+                      JSON.stringify({ type: "audio", chunk: audioBase64 }) +
+                        "\n"
+                    )
+                  )
+                }
+              }
+            }
+
+            // Fallback: If buffer is getting long without sentence endings, send anyway
+            const wordCount = sentenceBuffer.trim().split(/\s+/).length
+            if (
+              wordCount >= MIN_WORDS_FOR_TTS &&
+              sentenceBuffer.trim().length > 0
+            ) {
+              const audioBuffer = await textToSpeechStream(sentenceBuffer)
+              if (audioBuffer && audioBuffer.length > 0) {
                 const audioBase64 = Buffer.from(audioBuffer).toString("base64")
                 controller.enqueue(
                   encoder.encode(
@@ -245,6 +293,20 @@ export async function POST(request: NextRequest) {
                   )
                 )
               }
+              sentenceBuffer = "" // Clear buffer after sending
+            }
+          }
+
+          // Process any remaining text in buffer
+          if (sentenceBuffer.trim().length > 0) {
+            const audioBuffer = await textToSpeechStream(sentenceBuffer)
+            if (audioBuffer && audioBuffer.length > 0) {
+              const audioBase64 = Buffer.from(audioBuffer).toString("base64")
+              controller.enqueue(
+                encoder.encode(
+                  JSON.stringify({ type: "audio", chunk: audioBase64 }) + "\n"
+                )
+              )
             }
           }
 

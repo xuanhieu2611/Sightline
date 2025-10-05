@@ -101,29 +101,6 @@ export default function AnalysisBox({ blob }: Props) {
     }
   }
 
-  // helper: send text chunk to server TTS endpoint which proxies to ElevenLabs.
-  // Expects /api/tts to return audio/mpeg binary.
-  const synthesizeChunk = async (text: string, signal?: AbortSignal) => {
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-        signal,
-      })
-      if (!res.ok) {
-        console.warn("TTS failed", await res.text().catch(() => ""))
-        return null
-      }
-      const ab = await res.arrayBuffer()
-      return new Blob([ab], { type: "audio/mpeg" })
-    } catch (e) {
-      if ((e as any)?.name === "AbortError") return null
-      console.error("synthesizeChunk error", e)
-      return null
-    }
-  }
-
   // Helper: Combine multiple audio blobs into one complete audio file
   const combineAudioBlobs = async (blobs: Blob[]): Promise<Blob> => {
     if (blobs.length === 0) throw new Error("No blobs to combine")
@@ -193,12 +170,6 @@ export default function AnalysisBox({ blob }: Props) {
           const json = await res.json().catch(() => null)
           if (json?.description) {
             setDescription(json.description)
-            const b = await synthesizeChunk(json.description, ac.signal)
-            if (b) {
-              audioQueueRef.current.push(b)
-              allAudioChunksRef.current.push(b)
-              playNextAudio()
-            }
           }
           setAnalyzing(false)
           return
@@ -233,18 +204,10 @@ export default function AnalysisBox({ blob }: Props) {
                 if (!isPlayingRef.current) playNextAudio()
               }
 
-              // if server sends text chunks, synthesize via ElevenLabs proxy
+              // if server sends text chunks, just display them
               else if (obj.type === "text" && obj.chunk) {
                 fullText += obj.chunk
                 setDescription(fullText)
-                // synthesize asynchronously but don't block parsing
-                synthesizeChunk(obj.chunk, ac.signal).then((audioBlob) => {
-                  if (audioBlob) {
-                    allAudioChunksRef.current.push(audioBlob) // Collect ALL chunks
-                    audioQueueRef.current.push(audioBlob)
-                    if (!isPlayingRef.current) playNextAudio()
-                  }
-                })
               }
 
               // When done, combine all audio chunks
@@ -283,12 +246,6 @@ export default function AnalysisBox({ blob }: Props) {
             if (obj.type === "text" && obj.chunk) {
               fullText += obj.chunk
               setDescription(fullText)
-              const audioBlob = await synthesizeChunk(obj.chunk, ac.signal)
-              if (audioBlob) {
-                allAudioChunksRef.current.push(audioBlob)
-                audioQueueRef.current.push(audioBlob)
-                if (!isPlayingRef.current) playNextAudio()
-              }
             } else if (obj.type === "audio" && obj.chunk) {
               const audioData = Uint8Array.from(atob(obj.chunk), (c) =>
                 c.charCodeAt(0)

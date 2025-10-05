@@ -209,7 +209,7 @@ export default function AnalysisBox({ blob }: Props) {
         const form = new FormData()
         form.append("image", blob, "photo.jpg")
 
-        const res = await fetch("/api/image-describe", {
+        const res = await fetch("/api/image-analyze", {
           method: "POST",
           body: form,
           signal: ac.signal,

@@ -32,8 +32,8 @@ export default function DescribePage() {
 
   return (
     <div
-      className="bg-black text-white flex flex-col items-center justify-center p-6"
-      style={{ height: "calc(100vh - 180px)" }}
+      className="bg-black text-white flex flex-col items-center p-6 pt-8"
+      style={{ minHeight: "calc(100vh - 180px)" }}
     >
       <div className="w-full max-w-md flex flex-col items-center">
         {!capturedBlob ? (
@@ -41,7 +41,7 @@ export default function DescribePage() {
             onClick={() => setCameraOpen(true)}
             type="button"
             aria-label="Open camera"
-            className="w-40 h-40 md:w-56 md:h-56 bg-black text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white active:scale-95 transition-transform focus:outline-none"
+            className="w-40 h-40 md:w-56 md:h-56 bg-black text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white active:scale-95 transition-transform focus:outline-none mt-20"
           >
             <FiCamera size={64} />
           </button>

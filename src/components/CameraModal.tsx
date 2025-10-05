@@ -36,17 +36,6 @@ export default function CameraModal({ open, onClose, onCapture }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="bg-black rounded-lg w-full max-w-xl overflow-hidden">
-        <div className="flex items-center justify-between p-3 border-b border-white/10">
-          <div className="text-white font-semibold">Camera</div>
-          <button
-            aria-label="Close camera"
-            onClick={onClose}
-            className="text-white/80 hover:text-white"
-          >
-            Close
-          </button>
-        </div>
-
         <div className="p-4">
           {isMobileNow ? (
             // MobileCapture is mounted hidden and will open native camera immediately via ref

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import Navigation from "./components/Navigation"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -9,8 +10,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Sightline - Accessibility Assistant",
-  description:
-    "AI-powered accessibility assistant for navigation and reading assistance",
+  description: "AI-powered accessibility assistant for navigation and reading assistance",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -43,15 +43,13 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta
-          name="apple-mobile-web-app-status-bar-style"
-          content="black-translucent"
-        />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Sightline" />
         <link rel="apple-touch-icon" href="/icons/icon-152x152.svg" />
         <link rel="icon" href="/icons/icon-192x192.svg" />
       </head>
       <body className={`${inter.className} bg-black text-white antialiased`}>
+        <Navigation />
         {children}
       </body>
     </html>

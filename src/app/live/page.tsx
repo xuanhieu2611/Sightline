@@ -12,6 +12,7 @@ export default function DescribePage() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isPlayingAudioRef = useRef(false)
   const audioRef = useRef<HTMLAudioElement | null>(null) // 👈 NEW: Store audio element
+  const abortControllerRef = useRef<AbortController | null>(null) // For canceling fetch requests
 
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [lastDescription, setLastDescription] = useState("")
@@ -38,6 +39,27 @@ export default function DescribePage() {
     return () => {
       stopCamera()
       stopMonitoring()
+      // Abort any ongoing fetch requests when unmounting
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      // Stop any playing audio when navigating away
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+      // Cancel any speech synthesis
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [])
+
+  // Initialize audio element
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      audioRef.current = new Audio()
     }
   }, [])
 
@@ -46,7 +68,7 @@ export default function DescribePage() {
     const announceMode = () => {
       if ("speechSynthesis" in window) {
         speechSynthesis.cancel()
-        const utterance = new SpeechSynthesisUtterance("Livestream mode")
+        const utterance = new SpeechSynthesisUtterance('"Live" mode')
         utterance.rate = 0.9
         utterance.pitch = 1
         utterance.volume = 1
@@ -214,6 +236,9 @@ export default function DescribePage() {
   // Analyze image for MANUAL capture - uses /api/image-describe (streaming with ElevenLabs audio)
   const analyzeImageManual = async (imageBlob: Blob) => {
     try {
+      // Create abort controller for this request
+      abortControllerRef.current = new AbortController()
+
       const formData = new FormData()
       formData.append("image", imageBlob)
 
@@ -221,6 +246,7 @@ export default function DescribePage() {
       const response = await fetch("/api/image-describe", {
         method: "POST",
         body: formData,
+        signal: abortControllerRef.current.signal,
       })
 
       if (!response.ok) {
@@ -273,7 +299,15 @@ export default function DescribePage() {
         speakText(fullText)
       }
     } catch (error) {
-      console.error("Manual analysis error:", error)
+      // Handle abort errors gracefully (user navigated away)
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("🚫 Request aborted (user navigated away)")
+      } else {
+        console.error("Manual analysis error:", error)
+      }
+    } finally {
+      // Clean up abort controller reference
+      abortControllerRef.current = null
     }
   }
 
@@ -447,9 +481,8 @@ export default function DescribePage() {
 
   return (
     <div
-      className="bg-black text-white flex flex-col"
+      className="bg-black text-white flex flex-col h-full overflow-hidden"
       style={{
-        minHeight: "calc(100vh - 180px)",
         transform: getTransform(),
         transition: isSwiping ? "none" : "transform 0.3s ease-out",
       }}

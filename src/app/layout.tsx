@@ -52,9 +52,11 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-152x152.svg" />
         <link rel="icon" href="/icons/icon-192x192.svg" />
       </head>
-      <body className={`${inter.className} bg-black text-white antialiased`}>
+      <body
+        className={`${inter.className} bg-black text-white antialiased flex flex-col`}
+      >
         <Navigation />
-        {children}
+        <main className="flex-1 overflow-hidden">{children}</main>
       </body>
     </html>
   )

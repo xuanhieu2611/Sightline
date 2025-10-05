@@ -44,7 +44,13 @@ export default function DescribePage() {
 
     // Small delay to ensure smooth transition
     const timer = setTimeout(announceMode, 100)
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      // Cancel any speech synthesis when navigating away
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
   }, [])
 
   const handleCapture = (blob: Blob) => {
@@ -81,16 +87,13 @@ export default function DescribePage() {
 
   // Swipe handlers
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Disable swipe when image is captured
-    if (capturedBlob) return
-
     const touch = e.touches[0]
     setTouchStart({ x: touch.clientX, y: touch.clientY })
     setTouchCurrent({ x: touch.clientX, y: touch.clientY })
   }
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchStart || capturedBlob) return
+    if (!touchStart) return
 
     const touch = e.touches[0]
     const currentPos = { x: touch.clientX, y: touch.clientY }
@@ -108,7 +111,7 @@ export default function DescribePage() {
   }
 
   const handleTouchEnd = () => {
-    if (!touchStart || !touchCurrent || capturedBlob) {
+    if (!touchStart || !touchCurrent) {
       setTouchStart(null)
       setTouchCurrent(null)
       setIsSwiping(false)
@@ -134,8 +137,7 @@ export default function DescribePage() {
 
   // Calculate transform for visual feedback
   const getTransform = () => {
-    if (!isSwiping || !touchStart || !touchCurrent || capturedBlob)
-      return "translateX(0px)"
+    if (!isSwiping || !touchStart || !touchCurrent) return "translateX(0px)"
 
     const deltaX = touchCurrent.x - touchStart.x
     // Only allow left swipe (negative values)
@@ -145,9 +147,8 @@ export default function DescribePage() {
 
   return (
     <div
-      className="bg-black text-white flex flex-col items-center px-6 py-2"
+      className="bg-black text-white flex flex-col items-center px-6 py-2 h-full overflow-hidden"
       style={{
-        minHeight: "calc(100vh - 180px)",
         transform: getTransform(),
         transition: isSwiping ? "none" : "transform 0.3s ease-out",
       }}

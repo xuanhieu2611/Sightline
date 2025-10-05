@@ -241,22 +241,48 @@ export async function POST(request: NextRequest) {
     // Create a readable stream with sentence buffering
     const stream = new ReadableStream({
       async start(controller) {
+        // Helper to safely enqueue data (checks if controller is still open)
+        const safeEnqueue = (data: Uint8Array): boolean => {
+          try {
+            // Check if controller is still open (desiredSize is null when closed)
+            if (controller.desiredSize !== null) {
+              controller.enqueue(data)
+              return true
+            }
+            return false
+          } catch (error) {
+            console.log("Client disconnected, stopping stream")
+            return false
+          }
+        }
+
         try {
           let fullText = ""
           let sentenceBuffer = ""
           const MIN_WORDS_FOR_TTS = 8 // Send to TTS after this many words
+          let clientDisconnected = false
 
           for await (const chunk of result.stream) {
+            // Stop processing if client disconnected
+            if (clientDisconnected) {
+              console.log("Stopping stream processing due to client disconnect")
+              break
+            }
             const chunkText = chunk.text()
             fullText += chunkText
             sentenceBuffer += chunkText
 
             // Send text chunk immediately for display
-            controller.enqueue(
-              encoder.encode(
-                JSON.stringify({ type: "text", chunk: chunkText }) + "\n"
+            if (
+              !safeEnqueue(
+                encoder.encode(
+                  JSON.stringify({ type: "text", chunk: chunkText }) + "\n"
+                )
               )
-            )
+            ) {
+              clientDisconnected = true
+              break
+            }
 
             // Extract complete sentences
             const { sentences, remaining } = extractSentences(sentenceBuffer)
@@ -264,66 +290,93 @@ export async function POST(request: NextRequest) {
 
             // Convert complete sentences to audio
             for (const sentence of sentences) {
+              if (clientDisconnected) break
+
               if (sentence.trim()) {
                 const audioBuffer = await textToSpeechStream(sentence)
                 if (audioBuffer && audioBuffer.length > 0) {
                   const audioBase64 =
                     Buffer.from(audioBuffer).toString("base64")
-                  controller.enqueue(
-                    encoder.encode(
-                      JSON.stringify({ type: "audio", chunk: audioBase64 }) +
-                        "\n"
+                  if (
+                    !safeEnqueue(
+                      encoder.encode(
+                        JSON.stringify({ type: "audio", chunk: audioBase64 }) +
+                          "\n"
+                      )
                     )
-                  )
+                  ) {
+                    clientDisconnected = true
+                    break
+                  }
                 }
               }
             }
 
             // Fallback: If buffer is getting long without sentence endings, send anyway
-            const wordCount = sentenceBuffer.trim().split(/\s+/).length
-            if (
-              wordCount >= MIN_WORDS_FOR_TTS &&
-              sentenceBuffer.trim().length > 0
-            ) {
-              const audioBuffer = await textToSpeechStream(sentenceBuffer)
-              if (audioBuffer && audioBuffer.length > 0) {
-                const audioBase64 = Buffer.from(audioBuffer).toString("base64")
-                controller.enqueue(
-                  encoder.encode(
-                    JSON.stringify({ type: "audio", chunk: audioBase64 }) + "\n"
-                  )
-                )
+            if (!clientDisconnected) {
+              const wordCount = sentenceBuffer.trim().split(/\s+/).length
+              if (
+                wordCount >= MIN_WORDS_FOR_TTS &&
+                sentenceBuffer.trim().length > 0
+              ) {
+                const audioBuffer = await textToSpeechStream(sentenceBuffer)
+                if (audioBuffer && audioBuffer.length > 0) {
+                  const audioBase64 =
+                    Buffer.from(audioBuffer).toString("base64")
+                  if (
+                    !safeEnqueue(
+                      encoder.encode(
+                        JSON.stringify({ type: "audio", chunk: audioBase64 }) +
+                          "\n"
+                      )
+                    )
+                  ) {
+                    clientDisconnected = true
+                  }
+                }
+                sentenceBuffer = "" // Clear buffer after sending
               }
-              sentenceBuffer = "" // Clear buffer after sending
             }
           }
 
           // Process any remaining text in buffer
-          if (sentenceBuffer.trim().length > 0) {
+          if (!clientDisconnected && sentenceBuffer.trim().length > 0) {
             const audioBuffer = await textToSpeechStream(sentenceBuffer)
             if (audioBuffer && audioBuffer.length > 0) {
               const audioBase64 = Buffer.from(audioBuffer).toString("base64")
-              controller.enqueue(
-                encoder.encode(
-                  JSON.stringify({ type: "audio", chunk: audioBase64 }) + "\n"
+              if (
+                !safeEnqueue(
+                  encoder.encode(
+                    JSON.stringify({ type: "audio", chunk: audioBase64 }) + "\n"
+                  )
                 )
-              )
+              ) {
+                clientDisconnected = true
+              }
             }
           }
 
-          // Send completion signal
-          controller.enqueue(
-            encoder.encode(JSON.stringify({ type: "done" }) + "\n")
-          )
+          // Send completion signal only if client is still connected
+          if (!clientDisconnected) {
+            safeEnqueue(encoder.encode(JSON.stringify({ type: "done" }) + "\n"))
+          }
         } catch (error) {
           console.error("Streaming error:", error)
-          controller.enqueue(
+          // Try to send error message, but don't fail if controller is closed
+          safeEnqueue(
             encoder.encode(
               JSON.stringify({ type: "error", error: "Analysis failed" }) + "\n"
             )
           )
         } finally {
-          controller.close()
+          // Safely close the controller
+          try {
+            if (controller.desiredSize !== null) {
+              controller.close()
+            }
+          } catch (error) {
+            console.log("Controller already closed")
+          }
         }
       },
     })

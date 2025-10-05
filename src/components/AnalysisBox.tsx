@@ -352,6 +352,11 @@ export default function AnalysisBox({ blob }: Props) {
       try {
         reader?.cancel()
       } catch {}
+      // Stop any playing audio when navigating away
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause()
+        currentAudioRef.current.currentTime = 0
+      }
       audioQueueRef.current = []
       isPlayingRef.current = false
       setIsPlaying(false)

@@ -7,20 +7,22 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onCapture: (blob: Blob) => void;
+  isProcessingOrPlayingAudio: boolean;
+  setIsProcessionOrPlayingAudio: (value: boolean) => void;
 };
 
-export default function CameraModal({ open, onClose, onCapture }: Props) {
+export default function CameraModal({ open, onClose, onCapture, isProcessingOrPlayingAudio, setIsProcessionOrPlayingAudio }: Props) {
   const mobileRef = useRef<MobileCaptureHandle | null>(null);
 
   useEffect(() => {
-    if (!open || typeof navigator === "undefined") return;
+    if (!open || typeof navigator === "undefined" || isProcessingOrPlayingAudio) return;
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
       // trigger mobile file input (MobileCapture should expose open() via ref)
       // small timeout lets modal mount before opening native camera UI
       setTimeout(() => mobileRef.current?.open(), 80);
     }
-  }, [open]);
+  }, [open, isProcessingOrPlayingAudio]);
 
   if (!open) return null;
 
@@ -29,9 +31,25 @@ export default function CameraModal({ open, onClose, onCapture }: Props) {
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const handleCapture = (blob: Blob) => {
+    if (isProcessingOrPlayingAudio) {
+      // Prevent capture if audio is still processing or playing
+      return;
+    }
     onCapture(blob);
     onClose();
   };
+
+  // Don't show modal if audio is processing/playing
+  if (isProcessingOrPlayingAudio) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="bg-gray-900 rounded-lg p-8 text-center">
+          <p className="text-white text-lg mb-2">Please wait...</p>
+          <p className="text-gray-400">Audio is still playing from the previous capture</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">

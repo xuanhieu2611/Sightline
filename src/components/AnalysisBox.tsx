@@ -6,6 +6,7 @@ type Props = {
 
 export default function AnalysisBox({ blob }: Props) {
   const [analyzing, setAnalyzing] = useState(false);
+  const [description, setDescription] = useState("");
 
   // audio queue / playback refs (from hieu)
   const audioQueueRef = useRef<Blob[]>([]);
@@ -77,6 +78,7 @@ export default function AnalysisBox({ blob }: Props) {
 
     (async () => {
       setAnalyzing(true);
+      setDescription("");
       audioQueueRef.current = [];
       isPlayingRef.current = false;
 
@@ -100,6 +102,7 @@ export default function AnalysisBox({ blob }: Props) {
           // fallback: non-streaming response — expect text description
           const json = await res.json().catch(() => null);
           if (json?.description) {
+            setDescription(json.description);
             const b = await synthesizeChunk(json.description, ac.signal);
             if (b) {
               audioQueueRef.current.push(b);
@@ -113,6 +116,7 @@ export default function AnalysisBox({ blob }: Props) {
         reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let fullText = "";
 
         while (true) {
           const { value, done } = await reader.read();
@@ -137,6 +141,8 @@ export default function AnalysisBox({ blob }: Props) {
 
               // if server sends text chunks, synthesize via ElevenLabs proxy
               else if (obj.type === "text" && obj.chunk) {
+                fullText += obj.chunk;
+                setDescription(fullText);
                 // synthesize asynchronously but don't block parsing
                 synthesizeChunk(obj.chunk, ac.signal).then((audioBlob) => {
                   if (audioBlob) {
@@ -163,6 +169,8 @@ export default function AnalysisBox({ blob }: Props) {
           try {
             const obj = JSON.parse(buffer);
             if (obj.type === "text" && obj.chunk) {
+              fullText += obj.chunk;
+              setDescription(fullText);
               const audioBlob = await synthesizeChunk(obj.chunk, ac.signal);
               if (audioBlob) {
                 audioQueueRef.current.push(audioBlob);
@@ -201,12 +209,33 @@ export default function AnalysisBox({ blob }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blob]);
 
-  // No text UI — only an optional small analyzing indicator
+  // Show description text and audio indicator
   if (!blob) return null;
+  
   return (
     <div className="mt-6 w-full max-w-lg">
       {analyzing && (
-        <div className="text-center text-sm text-gray-300">Analyzing…</div>
+        <div className="text-center text-sm text-gray-300 mb-4">Analyzing…</div>
+      )}
+      
+      {description && (
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-600">
+          <p className="text-white whitespace-pre-line">{description}</p>
+        </div>
+      )}
+      
+      {/* Audio playback indicator */}
+      {isPlayingRef.current && (
+        <div className="mt-4 flex items-center justify-center space-x-2">
+          <div className="flex items-center space-x-1">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <div className="w-2 h-3 bg-white rounded-full animate-pulse"></div>
+            <div className="w-2 h-4 bg-white rounded-full animate-pulse"></div>
+            <div className="w-2 h-3 bg-white rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+          </div>
+          <span className="text-sm text-gray-300 ml-2">🔊 Playing</span>
+        </div>
       )}
     </div>
   );

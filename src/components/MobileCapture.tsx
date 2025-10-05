@@ -1,45 +1,228 @@
 "use client";
 
-import React, { forwardRef, useImperativeHandle, useRef } from "react";
+import React, {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+  useEffect,
+} from "react";
 
 export type MobileCaptureHandle = {
-  open: () => void;
+  open: () => Promise<void>;
+  close: () => void;
 };
 
 type Props = {
-  onCapture: (blob: Blob) => void;
-  accept?: string;
-  capture?: boolean | "environment" | "user";
+  onCapture?: (blob: Blob) => void;
+  intervalMs?: number;
+  facingMode?: "user" | "environment";
+  mimeType?: string;
+  quality?: number; // 0..1 for jpeg/webp
+  previewOnly?: boolean; // when true, only preview locally and do NOT call onCapture
 };
 
 const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
-  ({ onCapture, accept = "image/*", capture = "environment" }, ref) => {
-    const inputRef = useRef<HTMLInputElement | null>(null);
+  (
+    {
+      onCapture,
+      intervalMs = 3000,
+      facingMode = "environment",
+      mimeType = "image/jpeg",
+      quality = 0.92,
+      previewOnly = true,
+    },
+    ref
+  ) => {
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const intervalRef = useRef<number | null>(null);
+    const mountedRef = useRef(true);
+    const appendedVideoRef = useRef<HTMLVideoElement | null>(null);
+
+    const [photos, setPhotos] = useState<string[]>([]);
+    const revokeQueueRef = useRef<string[]>([]);
 
     useImperativeHandle(
       ref,
       () => ({
-        open: () => inputRef.current?.click(),
+        open: async () => {
+          await startStreamAndCapture();
+        },
+        close: () => {
+          stopStreamAndInterval();
+        },
       }),
       []
     );
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      onCapture(file);
-      e.currentTarget.value = "";
+    useEffect(() => {
+      mountedRef.current = true;
+      return () => {
+        mountedRef.current = false;
+        stopStreamAndInterval();
+        revokeQueueRef.current.forEach((u) => URL.revokeObjectURL(u));
+        revokeQueueRef.current = [];
+      };
+    }, []);
+
+    const stopStreamAndInterval = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          // @ts-ignore
+          videoRef.current.srcObject = null;
+        } catch {}
+      }
+      if (appendedVideoRef.current && appendedVideoRef.current.parentElement) {
+        try {
+          appendedVideoRef.current.parentElement.removeChild(appendedVideoRef.current);
+        } catch {}
+        appendedVideoRef.current = null;
+      }
+    };
+
+    const captureOnce = async (videoEl: HTMLVideoElement) => {
+      try {
+        const w = videoEl.videoWidth || 1280;
+        const h = videoEl.videoHeight || 720;
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(videoEl, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return;
+            // PREVIEW: create object URL and show locally
+            const url = URL.createObjectURL(blob);
+            revokeQueueRef.current.push(url);
+            setPhotos((p) => [url, ...p]);
+
+            // DO NOT call onCapture when previewOnly is true
+            if (!previewOnly) {
+              onCapture?.(blob);
+            }
+          },
+          mimeType,
+          quality
+        );
+      } catch (e) {
+        console.warn("captureOnce failed", e);
+      }
+    };
+
+    const waitForPlayable = (video: HTMLVideoElement, timeout = 2000) =>
+      new Promise<void>((resolve) => {
+        if (video.readyState >= 2 && (video.videoWidth || video.videoHeight)) return resolve();
+        const onLoaded = () => {
+          cleanup();
+          resolve();
+        };
+        const onPlaying = () => {
+          cleanup();
+          resolve();
+        };
+        const cleanup = () => {
+          video.removeEventListener("loadeddata", onLoaded);
+          video.removeEventListener("loadedmetadata", onLoaded);
+          video.removeEventListener("playing", onPlaying);
+        };
+        video.addEventListener("loadeddata", onLoaded);
+        video.addEventListener("loadedmetadata", onLoaded);
+        video.addEventListener("playing", onPlaying);
+        setTimeout(() => {
+          cleanup();
+          resolve();
+        }, timeout);
+      });
+
+    const startStreamAndCapture = async () => {
+      if (streamRef.current) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode },
+        });
+        if (!mountedRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+
+        let videoEl = videoRef.current;
+        if (!videoEl) {
+          videoEl = document.createElement("video");
+          videoEl.playsInline = true;
+          videoEl.muted = true;
+          Object.assign(videoEl.style, {
+            position: "fixed",
+            width: "1px",
+            height: "1px",
+            left: "-10000px",
+            top: "0",
+            opacity: "0",
+          });
+          document.body.appendChild(videoEl);
+          appendedVideoRef.current = videoEl;
+          videoRef.current = videoEl;
+        }
+
+        videoEl.srcObject = stream;
+        videoEl.muted = true;
+        videoEl.playsInline = true;
+
+        await waitForPlayable(videoEl);
+        await videoEl.play().catch(() => {});
+
+        await captureOnce(videoEl);
+
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = window.setInterval(() => {
+          if (videoRef.current) captureOnce(videoRef.current);
+        }, intervalMs) as unknown as number;
+      } catch (err) {
+        console.warn("MobileCapture start failed:", err);
+        stopStreamAndInterval();
+      }
     };
 
     return (
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        capture={capture}
-        onChange={handleChange}
-        className="hidden"
-      />
+      <div>
+        <video
+          ref={videoRef}
+          style={{
+            position: "fixed",
+            width: 1,
+            height: 1,
+            left: -10000,
+            top: 0,
+            opacity: 0,
+          }}
+          playsInline
+          muted
+        />
+
+        <div className="mt-4 flex gap-2 overflow-x-auto">
+          {photos.map((p, i) => (
+            <img
+              key={p + i}
+              src={p}
+              alt={`capture-${i}`}
+              className="w-24 h-24 object-cover rounded border border-white/20"
+              onClick={() => window.open(p, "_blank")}
+            />
+          ))}
+        </div>
+      </div>
     );
   }
 );

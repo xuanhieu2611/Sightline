@@ -44,6 +44,7 @@ export default function AnalysisBox({ blob }: Props) {
       }
 
       audio.src = audioUrl
+      audio.volume = 1.0 // Reset volume to full for actual playback
       audio.load() // Important: load the new source
 
       audio.onended = () => {
@@ -96,6 +97,7 @@ export default function AnalysisBox({ blob }: Props) {
       }
 
       audio.src = audioUrl
+      audio.volume = 1.0 // Reset volume to full for replay
       audio.load()
 
       audio.onended = () => {

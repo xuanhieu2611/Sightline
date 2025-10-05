@@ -22,14 +22,14 @@ export default function Navigation() {
             Describe
           </Link>
           <Link
-            href="/read"
+            href="/live"
             className={`px-8 py-4 text-2xl font-semibold rounded-3xl transition-colors ${
-              pathname === "/read"
+              pathname === "/live"
                 ? "bg-black text-white border-2 border-white"
                 : "bg-black text-white hover:bg-gray-500"
             }`}
           >
-            Read
+            Live
           </Link>
         </div>
       </div>

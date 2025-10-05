@@ -368,9 +368,23 @@ export default function AnalysisBox({ blob }: Props) {
         <div className="text-center text-sm text-gray-300 mb-4">Analyzing…</div>
       )}
 
-      {description && (
-        <div className="bg-gray-800 p-4 rounded-lg border border-gray-600">
-          <p className="text-white whitespace-pre-line">{description}</p>
+      {!description && (
+        <div className="w-full">
+          {/* Fixed-height container with overflow hidden, text aligned to bottom */}
+          <div className="h-40 flex flex-col justify-end overflow-hidden">
+            <p className="text-white whitespace-pre-line text-center text-4xl font-semibold">
+              "hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
+              hieu hieu hieu hieu hieu hieu
+            </p>
+          </div>
 
           {/* Audio controls */}
           <div className="mt-4 flex items-center justify-center space-x-4">

@@ -2,13 +2,14 @@
 
 import AnalysisBox from "@/components/AnalysisBox"
 import CameraModal from "@/components/CameraModal"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { FiCamera } from "react-icons/fi"
 
 export default function DescribePage() {
   const [cameraOpen, setCameraOpen] = useState(false)
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const lastTapRef = useRef<number>(0)
 
   useEffect(() => {
     return () => {
@@ -30,10 +31,27 @@ export default function DescribePage() {
     }
   }
 
+  const handleDoubleTap = () => {
+    // Only allow double-tap when an image is captured
+    if (!capturedBlob) return
+
+    const now = Date.now()
+    const DOUBLE_TAP_DELAY = 300 // milliseconds
+
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected
+      resetCapture()
+      setCameraOpen(true)
+    }
+
+    lastTapRef.current = now
+  }
+
   return (
     <div
-      className="bg-black text-white flex flex-col items-center p-6 pt-8"
+      className="bg-black text-white flex flex-col items-center px-6 py-2"
       style={{ minHeight: "calc(100vh - 180px)" }}
+      onClick={handleDoubleTap}
     >
       <div className="w-full max-w-md flex flex-col items-center">
         {!capturedBlob ? (
@@ -54,13 +72,6 @@ export default function DescribePage() {
                 className="w-full h-64 object-cover rounded-lg border border-white"
               />
             </div>
-
-            <button
-              onClick={resetCapture}
-              className="w-full px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
-            >
-              Take Another Photo
-            </button>
           </div>
         )}
 

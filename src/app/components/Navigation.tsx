@@ -7,26 +7,26 @@ export default function Navigation() {
   const pathname = usePathname()
 
   return (
-    <div className="bg-black text-white">
-      <div className="text-center py-8">
-        <h1 className="text-4xl font-bold pt-4 mb-6">SIGHTLINE</h1>
+    <div className="bg-black text-white ">
+      <div className="text-center py-2 pt-6">
+        <h1 className="text-5xl font-semibold pt-4 mb-6">SIGHTLINE</h1>
         <div className="flex justify-center gap-8 pb-2">
           <Link
             href="/describe"
-            className={`px-8 py-4 text-lg font-semibold rounded-lg transition-colors ${
+            className={`px-8 py-4 text-2xl font-semibold rounded-3xl transition-colors ${
               pathname === "/describe"
-                ? "bg-gray-700 text-white"
-                : "bg-gray-600 text-white hover:bg-gray-500"
+                ? "bg-black text-white border-2 border-white"
+                : "bg-black text-white hover:bg-gray-100"
             }`}
           >
             Describe
           </Link>
           <Link
             href="/read"
-            className={`px-8 py-4 text-lg font-semibold rounded-lg transition-colors ${
+            className={`px-8 py-4 text-2xl font-semibold rounded-3xl transition-colors ${
               pathname === "/read"
-                ? "bg-gray-700 text-white"
-                : "bg-gray-600 text-white hover:bg-gray-500"
+                ? "bg-black text-white border-2 border-white"
+                : "bg-black text-white hover:bg-gray-500"
             }`}
           >
             Read

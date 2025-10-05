@@ -209,7 +209,7 @@ export default function AnalysisBox({ blob }: Props) {
         const form = new FormData()
         form.append("image", blob, "photo.jpg")
 
-        const res = await fetch("/api/image-analyze", {
+        const res = await fetch("/api/image-describe", {
           method: "POST",
           body: form,
           signal: ac.signal,
@@ -368,61 +368,28 @@ export default function AnalysisBox({ blob }: Props) {
         <div className="text-center text-sm text-gray-300 mb-4">Analyzing…</div>
       )}
 
-      {!description && (
+      {description && (
         <div className="w-full">
           {/* Fixed-height container with overflow hidden, text aligned to bottom */}
           <div className="h-40 flex flex-col justify-end overflow-hidden">
             <p className="text-white whitespace-pre-line text-center text-4xl font-semibold">
-              "hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu hieu
-              hieu hieu hieu hieu hieu hieu
+              {description}
             </p>
-          </div>
-
-          {/* Audio controls */}
-          <div className="mt-4 flex items-center justify-center space-x-4">
-            <button
-              onClick={replayAudio}
-              disabled={isPlaying || !savedAudioBlobRef.current}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                isPlaying || !savedAudioBlobRef.current
-                  ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-            >
-              {isPlaying ? "🔊 Playing..." : "🔊 Play Again"}
-            </button>
-
-            {isPlaying && (
-              <button
-                onClick={stopAudio}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                ⏹️ Stop
-              </button>
-            )}
           </div>
         </div>
       )}
 
       {/* Audio playback indicator */}
       {isPlaying && (
-        <div className="mt-4 flex items-center justify-center space-x-2">
+        <div className="mt-6 flex items-center justify-center space-x-2">
           <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             <div className="w-2 h-3 bg-white rounded-full animate-pulse"></div>
             <div className="w-2 h-4 bg-white rounded-full animate-pulse"></div>
+            <div className="w-2 h-5 bg-white rounded-full animate-pulse"></div>
+            <div className="w-2 h-4 bg-white rounded-full animate-pulse"></div>
             <div className="w-2 h-3 bg-white rounded-full animate-pulse"></div>
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
           </div>
-          <span className="text-sm text-gray-300 ml-2">🔊 Playing</span>
+          <span className="text-md text-white ml-2">🔊 Playing</span>
         </div>
       )}
     </div>

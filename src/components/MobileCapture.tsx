@@ -1,230 +1,170 @@
-"use client";
+"use client"
 
 import React, {
   forwardRef,
   useImperativeHandle,
   useRef,
-  useState,
   useEffect,
-} from "react";
+  useState,
+} from "react"
 
 export type MobileCaptureHandle = {
-  open: () => Promise<void>;
-  close: () => void;
-};
+  open: () => void
+}
 
 type Props = {
-  onCapture?: (blob: Blob) => void;
-  intervalMs?: number;
-  facingMode?: "user" | "environment";
-  mimeType?: string;
-  quality?: number; // 0..1 for jpeg/webp
-  previewOnly?: boolean; // when true, only preview locally and do NOT call onCapture
-};
+  onCapture: (blob: Blob) => void
+  autoCapture?: boolean
+  captureDelay?: number // in seconds
+}
 
 const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
-  (
-    {
-      onCapture,
-      intervalMs = 3000,
-      facingMode = "environment",
-      mimeType = "image/jpeg",
-      quality = 0.92,
-      previewOnly = true,
-    },
-    ref
-  ) => {
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const intervalRef = useRef<number | null>(null);
-    const mountedRef = useRef(true);
-    const appendedVideoRef = useRef<HTMLVideoElement | null>(null);
-
-    const [photos, setPhotos] = useState<string[]>([]);
-    const revokeQueueRef = useRef<string[]>([]);
+  ({ onCapture, autoCapture = true, captureDelay = 3 }, ref) => {
+    const videoRef = useRef<HTMLVideoElement | null>(null)
+    const streamRef = useRef<MediaStream | null>(null)
+    const [isOpen, setIsOpen] = useState(false)
+    const [countdown, setCountdown] = useState<number | null>(null)
 
     useImperativeHandle(
       ref,
       () => ({
-        open: async () => {
-          await startStreamAndCapture();
-        },
-        close: () => {
-          stopStreamAndInterval();
-        },
+        open: () => setIsOpen(true),
       }),
       []
-    );
+    )
 
     useEffect(() => {
-      mountedRef.current = true;
+      if (!isOpen) return
+
+      let mounted = true
+      ;(async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+          })
+
+          if (!mounted) {
+            stream.getTracks().forEach((t) => t.stop())
+            return
+          }
+
+          streamRef.current = stream
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream
+            await videoRef.current.play()
+          }
+
+          // Start countdown after camera is ready
+          if (autoCapture) {
+            setCountdown(captureDelay)
+          }
+        } catch (err) {
+          console.error("Camera access failed:", err)
+          setIsOpen(false)
+        }
+      })()
+
       return () => {
-        mountedRef.current = false;
-        stopStreamAndInterval();
-        revokeQueueRef.current.forEach((u) => URL.revokeObjectURL(u));
-        revokeQueueRef.current = [];
-      };
-    }, []);
+        mounted = false
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop())
+          streamRef.current = null
+        }
+      }
+    }, [isOpen, autoCapture, captureDelay])
 
-    const stopStreamAndInterval = () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-      if (videoRef.current) {
-        try {
-          videoRef.current.pause();
-          // @ts-ignore
-          videoRef.current.srcObject = null;
-        } catch {}
-      }
-      if (appendedVideoRef.current && appendedVideoRef.current.parentElement) {
-        try {
-          appendedVideoRef.current.parentElement.removeChild(appendedVideoRef.current);
-        } catch {}
-        appendedVideoRef.current = null;
-      }
-    };
+    // Countdown timer
+    useEffect(() => {
+      if (countdown === null || countdown < 0) return
 
-    const captureOnce = async (videoEl: HTMLVideoElement) => {
-      try {
-        const w = videoEl.videoWidth || 1280;
-        const h = videoEl.videoHeight || 720;
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.drawImage(videoEl, 0, 0, w, h);
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) return;
-            // PREVIEW: create object URL and show locally
-            const url = URL.createObjectURL(blob);
-            revokeQueueRef.current.push(url);
-            setPhotos((p) => [url, ...p]);
+      if (countdown === 0) {
+        capturePhoto()
+        return
+      }
 
-            // DO NOT call onCapture when previewOnly is true
-            if (!previewOnly) {
-              onCapture?.(blob);
+      // Speak countdown for accessibility
+      const utterance = new SpeechSynthesisUtterance(countdown.toString())
+      utterance.rate = 1.5
+      window.speechSynthesis.speak(utterance)
+
+      // Haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(100)
+      }
+
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1)
+      }, 1000)
+
+      return () => clearTimeout(timer)
+    }, [countdown])
+
+    const capturePhoto = async () => {
+      const video = videoRef.current
+      if (!video) return
+
+      const w = video.videoWidth || 1280
+      const h = video.videoHeight || 720
+      const canvas = document.createElement("canvas")
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
+
+      ctx.drawImage(video, 0, 0, w, h)
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            // Audio feedback for capture
+            const utterance = new SpeechSynthesisUtterance("Photo captured")
+            utterance.rate = 1.5
+            window.speechSynthesis.speak(utterance)
+
+            // Double vibration for capture confirmation
+            if (navigator.vibrate) {
+              navigator.vibrate([200, 100, 200])
             }
-          },
-          mimeType,
-          quality
-        );
-      } catch (e) {
-        console.warn("captureOnce failed", e);
+
+            onCapture(blob)
+            setIsOpen(false)
+            setCountdown(null)
+          }
+        },
+        "image/jpeg",
+        0.92
+      )
+
+      // Stop stream after capture
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
       }
-    };
+    }
 
-    const waitForPlayable = (video: HTMLVideoElement, timeout = 2000) =>
-      new Promise<void>((resolve) => {
-        if (video.readyState >= 2 && (video.videoWidth || video.videoHeight)) return resolve();
-        const onLoaded = () => {
-          cleanup();
-          resolve();
-        };
-        const onPlaying = () => {
-          cleanup();
-          resolve();
-        };
-        const cleanup = () => {
-          video.removeEventListener("loadeddata", onLoaded);
-          video.removeEventListener("loadedmetadata", onLoaded);
-          video.removeEventListener("playing", onPlaying);
-        };
-        video.addEventListener("loadeddata", onLoaded);
-        video.addEventListener("loadedmetadata", onLoaded);
-        video.addEventListener("playing", onPlaying);
-        setTimeout(() => {
-          cleanup();
-          resolve();
-        }, timeout);
-      });
-
-    const startStreamAndCapture = async () => {
-      if (streamRef.current) return;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode },
-        });
-        if (!mountedRef.current) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-
-        let videoEl = videoRef.current;
-        if (!videoEl) {
-          videoEl = document.createElement("video");
-          videoEl.playsInline = true;
-          videoEl.muted = true;
-          Object.assign(videoEl.style, {
-            position: "fixed",
-            width: "1px",
-            height: "1px",
-            left: "-10000px",
-            top: "0",
-            opacity: "0",
-          });
-          document.body.appendChild(videoEl);
-          appendedVideoRef.current = videoEl;
-          videoRef.current = videoEl;
-        }
-
-        videoEl.srcObject = stream;
-        videoEl.muted = true;
-        videoEl.playsInline = true;
-
-        await waitForPlayable(videoEl);
-        await videoEl.play().catch(() => {});
-
-        await captureOnce(videoEl);
-
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = window.setInterval(() => {
-          if (videoRef.current) captureOnce(videoRef.current);
-        }, intervalMs) as unknown as number;
-      } catch (err) {
-        console.warn("MobileCapture start failed:", err);
-        stopStreamAndInterval();
-      }
-    };
+    if (!isOpen) return null
 
     return (
-      <div>
-        <video
-          ref={videoRef}
-          style={{
-            position: "fixed",
-            width: 1,
-            height: 1,
-            left: -10000,
-            top: 0,
-            opacity: 0,
-          }}
-          playsInline
-          muted
-        />
-
-        <div className="mt-4 flex gap-2 overflow-x-auto">
-          {photos.map((p, i) => (
-            <img
-              key={p + i}
-              src={p}
-              alt={`capture-${i}`}
-              className="w-24 h-24 object-cover rounded border border-white/20"
-              onClick={() => window.open(p, "_blank")}
-            />
-          ))}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+        <div className="relative w-full h-full">
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            playsInline
+            muted
+          />
+          {countdown !== null && countdown > 0 && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-white text-9xl font-bold animate-pulse">
+                {countdown}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    );
+    )
   }
-);
+)
 
-export default MobileCapture;
+MobileCapture.displayName = "MobileCapture"
+
+export default MobileCapture

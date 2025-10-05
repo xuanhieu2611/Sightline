@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 
 // Initialize Gemini AI and model ONCE (outside the handler)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "")
@@ -7,27 +8,29 @@ const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash-lite", // Faster, lighter model
 })
 
-// Optimized, concise prompt (maintains quality but reduces tokens)
-const PROMPT = `You are an assistive vision AI for blind users. Describe images clearly for text-to-speech.
+// Navigation-focused prompt for accessibility
+const PROMPT = `You are SightLine, a navigation assistant for visually impaired users. Provide clear, actionable descriptions for safe movement.
 
-Priority order:
-1. Environment context (e.g., "You're in an elevator")
-2. Text/numbers/signs (read clearly)
-3. Spatial layout and key objects
-4. People (mention position only, e.g., "One person ahead")
-5. Safety concerns (stairs, obstacles)
+CRITICAL PRIORITIES:
+1. SAFETY FIRST: Obstacles, stairs, doors, hazards
+2. NAVIGATION: Clear path directions (left/right/straight)
+3. PEOPLE: Position and movement ("Two people ahead, moving left")
+4. EXITS: Doors, elevators, stairways
+5. TEXT: Signs, labels, important written information
 
-Style:
-- Natural, conversational tone
-- 3-5 sentences for simple scenes, more if complex
-- Use clear spatial references (left/right/above/below)
-- Mention colors/lighting when relevant
+DESCRIPTION STYLE:
+- Start with immediate path information
+- Use clear spatial references ("Door on your right", "Clear path straight ahead")
+- Keep descriptions concise but complete
+- Mention lighting conditions if relevant
+- If unclear or dangerous, say so directly
 
-Avoid:
-- "This image shows..." - describe directly
-- Detailed people descriptions (clothing, features)
-- Minor irrelevant details
-- If unclear/dark, say so directly`
+EXAMPLES:
+- "Clear hallway ahead. Door on your right. No obstacles."
+- "Two people walking toward you. Stairs ahead - be careful."
+- "Restaurant entrance. Menu board on your left."
+
+Avoid: Detailed clothing descriptions, irrelevant background details, or "this image shows" language.`
 
 // ElevenLabs configuration
 const ELEVENLABS_API_KEY = process.env.ELEVEN_LABS_API_KEY || ""
@@ -51,44 +54,26 @@ async function textToSpeechStream(text: string): Promise<Uint8Array | null> {
         },
         body: JSON.stringify({
           text: text,
-          model_id: "eleven_flash_v2_5",
-          speed: 2.0,
+          model_id: "eleven_turbo_v2_5",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.8,
+            style: 0.2,
+            use_speaker_boost: true,
+          },
         }),
       }
     )
 
     if (!response.ok) {
-      console.error("ElevenLabs TTS error:", await response.text())
+      console.warn("ElevenLabs TTS failed:", response.status)
       return null
     }
 
-    // Collect all audio chunks into one buffer
-    const reader = response.body?.getReader()
-    if (!reader) return null
-
-    const chunks: Uint8Array[] = []
-    let totalLength = 0
-
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      if (value) {
-        chunks.push(value)
-        totalLength += value.length
-      }
-    }
-
-    // Concatenate all chunks into a single buffer
-    const completeAudio = new Uint8Array(totalLength)
-    let offset = 0
-    for (const chunk of chunks) {
-      completeAudio.set(chunk, offset)
-      offset += chunk.length
-    }
-
-    return completeAudio
+    const audioBuffer = await response.arrayBuffer()
+    return new Uint8Array(audioBuffer)
   } catch (error) {
-    console.error("TTS streaming error:", error)
+    console.error("ElevenLabs TTS error:", error)
     return null
   }
 }
@@ -181,138 +166,84 @@ async function optimizeImage(
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData()
-    const image = formData.get("image") as File
-
-    if (!image) {
-      return new Response(JSON.stringify({ error: "No image provided" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      })
+    // Check for API key
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        {
+          success: false,
+          description: "AI service not configured. Please contact support.",
+        },
+        { status: 503 }
+      )
     }
 
-    // Optimize image (resize if needed)
-    const { data: base64Image, mimeType } = await optimizeImage(image)
+    const formData = await request.formData()
+    const imageFile = formData.get("image") as File
 
-    // Use streaming for faster perceived performance with integrated TTS
+    if (!imageFile) {
+      return NextResponse.json(
+        { success: false, description: "No image provided" },
+        { status: 400 }
+      )
+    }
+
+    // Convert image to base64
+    const imageBuffer = await imageFile.arrayBuffer()
+    const imageBase64 = Buffer.from(imageBuffer).toString("base64")
+    const imageData = {
+      inlineData: {
+        data: imageBase64,
+        mimeType: imageFile.type,
+      },
+    }
+
+    // Generate content with streaming
+    const result = await model.generateContentStream([PROMPT, imageData])
+    
+    let fullText = ""
     const encoder = new TextEncoder()
+
+    // Create a readable stream
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const result = await model.generateContentStream([
-            PROMPT,
-            {
-              inlineData: {
-                data: base64Image,
-                mimeType: mimeType,
-              },
-            },
-          ])
-
-          let fullText = ""
-          let sentenceBuffer = ""
-          const MIN_WORDS_FOR_TTS = 8 // Send to TTS after this many words
-
           for await (const chunk of result.stream) {
             const chunkText = chunk.text()
             fullText += chunkText
-            sentenceBuffer += chunkText
 
-            // Send text chunk to client immediately for display
+            // Send text chunk
             controller.enqueue(
               encoder.encode(
-                JSON.stringify({
-                  type: "text",
-                  chunk: chunkText,
-                }) + "\n"
+                JSON.stringify({ type: "text", chunk: chunkText }) + "\n"
               )
             )
 
-            // Check if we have complete sentences to convert to speech
-            const { sentences, remaining } = extractSentences(sentenceBuffer)
-            sentenceBuffer = remaining
-
-            // Process each complete sentence through TTS
-            for (const sentence of sentences) {
-              const audioBuffer = await textToSpeechStream(sentence)
-
-              if (audioBuffer && audioBuffer.length > 0) {
-                const base64Audio = Buffer.from(audioBuffer).toString("base64")
+            // Convert text to speech and send audio
+            if (chunkText.trim()) {
+              const audioBuffer = await textToSpeechStream(chunkText)
+              if (audioBuffer) {
+                const audioBase64 = Buffer.from(audioBuffer).toString("base64")
                 controller.enqueue(
                   encoder.encode(
-                    JSON.stringify({
-                      type: "audio",
-                      chunk: base64Audio,
-                    }) + "\n"
+                    JSON.stringify({ type: "audio", chunk: audioBase64 }) + "\n"
                   )
                 )
               }
             }
-
-            // Fallback: If buffer is getting long without sentence endings, send anyway
-            const wordCount = sentenceBuffer.trim().split(/\s+/).length
-            if (
-              wordCount >= MIN_WORDS_FOR_TTS &&
-              sentenceBuffer.trim().length > 0
-            ) {
-              const audioBuffer = await textToSpeechStream(sentenceBuffer)
-
-              if (audioBuffer && audioBuffer.length > 0) {
-                const base64Audio = Buffer.from(audioBuffer).toString("base64")
-                controller.enqueue(
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "audio",
-                      chunk: base64Audio,
-                    }) + "\n"
-                  )
-                )
-              }
-              sentenceBuffer = "" // Clear buffer after sending
-            }
           }
 
-          // Process any remaining text in buffer
-          if (sentenceBuffer.trim().length > 0) {
-            const audioBuffer = await textToSpeechStream(sentenceBuffer)
-
-            if (audioBuffer && audioBuffer.length > 0) {
-              const base64Audio = Buffer.from(audioBuffer).toString("base64")
-              controller.enqueue(
-                encoder.encode(
-                  JSON.stringify({
-                    type: "audio",
-                    chunk: base64Audio,
-                  }) + "\n"
-                )
-              )
-            }
-          }
-
-          // Send final message
+          // Send completion signal
           controller.enqueue(
-            encoder.encode(
-              JSON.stringify({
-                type: "done",
-                success: true,
-                description: fullText,
-                timestamp: new Date().toISOString(),
-              }) + "\n"
-            )
+            encoder.encode(JSON.stringify({ type: "done" }) + "\n")
           )
-
-          controller.close()
         } catch (error) {
+          console.error("Streaming error:", error)
           controller.enqueue(
             encoder.encode(
-              JSON.stringify({
-                type: "error",
-                error: "Failed to analyze image",
-                details:
-                  error instanceof Error ? error.message : "Unknown error",
-              }) + "\n"
+              JSON.stringify({ type: "error", error: "Analysis failed" }) + "\n"
             )
           )
+        } finally {
           controller.close()
         }
       },
@@ -320,22 +251,19 @@ export async function POST(request: NextRequest) {
 
     return new Response(stream, {
       headers: {
-        "Content-Type": "application/json",
-        "Transfer-Encoding": "chunked",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
       },
     })
   } catch (error) {
     console.error("Error analyzing image:", error)
-
-    return new Response(
-      JSON.stringify({
-        error: "Failed to analyze image",
-        details: error instanceof Error ? error.message : "Unknown error",
-      }),
+    return NextResponse.json(
       {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+        success: false,
+        description: "Analysis failed. Please try again.",
+      },
+      { status: 500 }
     )
   }
 }

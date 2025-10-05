@@ -17,7 +17,11 @@
 
 ## 🌟 What is Sightline?
 
-Sightline is a Progressive Web App (PWA) that transforms your smartphone into an AI-powered vision assistant. Designed specifically for people with visual impairments, Sightline helps you navigate the world with confidence by providing real-time audio descriptions of your surroundings.
+Sightline is an AI-powered Progressive Web App (PWA) designed to help blind and low-vision individuals understand the world around them through real-time audio descriptions.
+
+Using the phone's camera, Sightline captures what's in front of the user and generates natural, vivid spoken explanations of the scene. The app combines Google's Gemini API for visual understanding and language generation with ElevenLabs for high-quality text-to-speech narration.
+
+The experience is designed to feel like having a personal sighted guide: users simply point their phone toward a scene (like a waterfall, street, or museum exhibit), and Sightline describes what it sees — including key objects, spatial context, colors, and atmosphere — in a clear and empathetic voice.
 
 ### 💡 The Problem We're Solving
 
@@ -72,7 +76,8 @@ Sightline combines cutting-edge AI with thoughtful UX design to create three cor
 ### 🤖 Powered by AI
 
 - **Google Gemini AI** - State-of-the-art vision understanding
-- **Real-time Analysis** - Instant image processing
+- **ElevenLabs** - Natural, human-like voice synthesis
+- **Real-time Analysis** - Instant image processing and audio feedback
 - **Natural Language** - Descriptions that actually make sense
 - **Privacy Focused** - Images analyzed in real-time, never stored
 
@@ -87,6 +92,7 @@ Sightline is built with modern, production-ready technologies:
 | **[Next.js 14](https://nextjs.org/)**                                                 | React framework with App Router    |
 | **[TypeScript](https://www.typescriptlang.org/)**                                     | Type-safe development              |
 | **[Google Gemini AI](https://ai.google.dev/)**                                        | Vision and language understanding  |
+| **[ElevenLabs](https://elevenlabs.io/)**                                              | High-quality text-to-speech        |
 | **[PWA](https://web.dev/pwa/)**                                                       | Offline-first, installable web app |
 | **[Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API)** | Text-to-speech output              |
 | **[MediaDevices API](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices)** | Camera access                      |
@@ -119,8 +125,12 @@ cd Sightline
 # Install dependencies
 npm install
 
-# Set up environment (optional - for Gemini API)
-echo "GEMINI_API_KEY=your_key_here" > .env.local
+# Set up environment variables (required for AI features)
+cat > .env.local << EOL
+GEMINI_API_KEY=your_gemini_key_here
+ELEVEN_LABS_API_KEY=your_elevenlabs_key_here
+VOICE_ID=your_voice_id_here
+EOL
 
 # Start development server
 npm run dev
@@ -215,6 +225,7 @@ We're constantly improving Sightline. Here's what's coming:
 Sightline wouldn't be possible without:
 
 - **[Google Gemini AI](https://ai.google.dev/)** - For powerful vision AI capabilities
+- **[ElevenLabs](https://elevenlabs.io/)** - For natural, accessible voice synthesis
 - **[Next.js Team](https://nextjs.org/)** - For an amazing React framework
 - **[Vercel](https://vercel.com/)** - For seamless deployment
 - **Accessibility Community** - For invaluable feedback and testing

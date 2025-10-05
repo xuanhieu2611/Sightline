@@ -1,74 +1,48 @@
-"use client"
+"use client";
 
-import AnalysisBox from "@/components/AnalysisBox";
-import CameraModal from "@/components/CameraModal";
-import { useState, useEffect } from "react";
-import { FiCamera } from "react-icons/fi";
+import { useState } from "react";
+import { Camera } from "@/camera/Camera";
 
 export default function DescribePage() {
-    const [cameraOpen, setCameraOpen] = useState(false);
-    const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
-    const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [started, setStarted] = useState(false);
 
-    useEffect(() => {
-        return () => {
-            if (imageUrl) URL.revokeObjectURL(imageUrl);
-        };
-    }, [imageUrl]);
+  const handleStart = () => {
+    // ✅ Unlock speech synthesis on user gesture
+    const unlock = new SpeechSynthesisUtterance("");
+    speechSynthesis.speak(unlock);
 
-    const handleCapture = (blob: Blob) => {
-        setCapturedBlob(blob);
-        setImageUrl(URL.createObjectURL(blob));
-        setCameraOpen(false);
-    };
+    // ✅ You can also unlock audio contexts if you use Web Audio later:
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+    } catch (err) {
+      console.warn("AudioContext resume failed", err);
+    }
 
-    const resetCapture = () => {
-        setCapturedBlob(null);
-        if (imageUrl) {
-            URL.revokeObjectURL(imageUrl);
-            setImageUrl(null);
-        }
-    };
+    // ✅ Proceed to start camera
+    setStarted(true);
+  };
 
-    return (
-        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
-            <div className="w-full max-w-md flex flex-col items-center">
-                {!capturedBlob ? (
-                    <button
-                        onClick={() => setCameraOpen(true)}
-                        type="button"
-                        aria-label="Open camera"
-                        className="w-40 h-40 md:w-56 md:h-56 bg-black text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white active:scale-95 transition-transform focus:outline-none"
-                    >
-                        <FiCamera size={64} />
-                    </button>
-                ) : (
-                    <div className="w-full space-y-6">
-                        <div className="flex justify-center">
-                            <img
-                                src={imageUrl!}
-                                alt="Captured for analysis"
-                                className="w-full h-64 object-cover rounded-lg border border-white"
-                            />
-                        </div>
-                        
-                        <button
-                            onClick={resetCapture}
-                            className="w-full px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
-                        >
-                            Take Another Photo
-                        </button>
-                    </div>
-                )}
-
-                <CameraModal
-                    open={cameraOpen}
-                    onClose={() => setCameraOpen(false)}
-                    onCapture={handleCapture}
-                />
-
-                <AnalysisBox blob={capturedBlob} />
-            </div>
-        </div>
-    );
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white">
+      {!started ? (
+        <button
+          onClick={handleStart}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black text-white focus:outline-none"
+          style={{
+            fontSize: "5rem",
+            padding: "4rem",
+            lineHeight: 1,
+            textAlign: "center",
+            fontWeight: 800,
+            borderRadius: 0,
+          }}
+        >
+          Tap to Start
+        </button>
+      ) : (
+        <Camera />
+      )}
+    </div>
+  );
 }

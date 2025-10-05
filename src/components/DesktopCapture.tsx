@@ -10,6 +10,7 @@ type Props = {
 export default function DesktopCapture({ onCapture, onCancel }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     let mounted = true;

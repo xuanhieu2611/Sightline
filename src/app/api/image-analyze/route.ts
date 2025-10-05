@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Create the prompt for accessibility-focused description
-    const prompt = `You are SightLine, a navigation assistant for visually impaired users. Provide clear, actionable descriptions for safe movement.
+    const prompt = `You are SightLine, a navigation assistant for visually impaired users. Provide clear, actionable descriptions for safe movement. 
 
 CRITICAL PRIORITIES:
 1. SAFETY FIRST: Obstacles, stairs, doors, hazards

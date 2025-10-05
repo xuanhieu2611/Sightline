@@ -19,7 +19,6 @@ type Props = {
   facingMode?: "user" | "environment";
   mimeType?: string;
   quality?: number; // 0..1 for jpeg/webp
-  previewOnly?: boolean; // when true, only preview locally and do NOT call onCapture
 };
 
 const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
@@ -30,7 +29,6 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
       facingMode = "environment",
       mimeType = "image/jpeg",
       quality = 0.92,
-      previewOnly = true,
     },
     ref
   ) => {
@@ -39,6 +37,7 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
     const intervalRef = useRef<number | null>(null);
     const mountedRef = useRef(true);
     const appendedVideoRef = useRef<HTMLVideoElement | null>(null);
+    const [isGettingOrPlayingAudio, setIsGettingOrPlayingAudio] = useState<boolean>(false);
 
     const [photos, setPhotos] = useState<string[]>([]);
     const revokeQueueRef = useRef<string[]>([]);
@@ -82,6 +81,7 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
           videoRef.current.srcObject = null;
         } catch {}
       }
+      // remove appended hidden video if we created one
       if (appendedVideoRef.current && appendedVideoRef.current.parentElement) {
         try {
           appendedVideoRef.current.parentElement.removeChild(appendedVideoRef.current);
@@ -103,15 +103,10 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
         canvas.toBlob(
           (blob) => {
             if (!blob) return;
-            // PREVIEW: create object URL and show locally
+            onCapture?.(blob);
             const url = URL.createObjectURL(blob);
             revokeQueueRef.current.push(url);
             setPhotos((p) => [url, ...p]);
-
-            // DO NOT call onCapture when previewOnly is true
-            if (!previewOnly) {
-              onCapture?.(blob);
-            }
           },
           mimeType,
           quality
@@ -160,6 +155,7 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
 
         let videoEl = videoRef.current;
         if (!videoEl) {
+          // create and append a tiny hidden video to the DOM to improve iOS behavior
           videoEl = document.createElement("video");
           videoEl.playsInline = true;
           videoEl.muted = true;
@@ -180,15 +176,19 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
         videoEl.muted = true;
         videoEl.playsInline = true;
 
+        // wait for video to be ready; play may be blocked until user gesture but waitForPlayable helps
         await waitForPlayable(videoEl);
+        // attempt play (may reject if autoplay prevented)
         await videoEl.play().catch(() => {});
 
+        // initial capture (ensure dimensions are available)
         await captureOnce(videoEl);
 
+        // set interval for repeated captures; guard against multiple intervals
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = window.setInterval(() => {
           if (videoRef.current) captureOnce(videoRef.current);
-        }, intervalMs) as unknown as number;
+        }, intervalMs) as number;
       } catch (err) {
         console.warn("MobileCapture start failed:", err);
         stopStreamAndInterval();

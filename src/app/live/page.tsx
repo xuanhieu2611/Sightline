@@ -182,11 +182,31 @@ export default function DescribePage() {
       console.log("🤖 Auto API response:", data)
 
       if (data.description) {
+        console.log(
+          "📝 Got description, setting and speaking:",
+          data.description
+        )
         setLastDescription(data.description)
         speakText(data.description)
+      } else {
+        console.log("❌ No description in response, continuing loop anyway")
+        // Even if no description, continue the loop
+        setTimeout(() => {
+          if (!isAnalyzing) {
+            console.log("🔄 No description, starting next analysis")
+            captureAndAnalyze()
+          }
+        }, 2000) // Wait 2 seconds if no description
       }
     } catch (error) {
       console.error("Auto analysis error:", error)
+      // Even on error, try to continue the loop
+      setTimeout(() => {
+        if (!isAnalyzing) {
+          console.log("🔄 Starting analysis after API error")
+          captureAndAnalyze()
+        }
+      }, 3000) // Wait 3 seconds on error
     }
   }
 
@@ -206,10 +226,26 @@ export default function DescribePage() {
         console.log("🔊 Speech ended, starting next analysis")
         // Start next analysis when TTS is done
         setTimeout(() => {
+          console.log("🔄 TTS timeout triggered, checking if should analyze")
           if (!isAnalyzing) {
+            console.log("✅ Starting next analysis from TTS completion")
             captureAndAnalyze()
+          } else {
+            console.log("❌ Skipping - already analyzing")
           }
         }, 500) // Small delay to ensure smooth transition
+      }
+
+      // Also add error handling
+      utterance.onerror = (event) => {
+        console.error("🔊 Speech error:", event.error)
+        // Even on error, try to continue the loop
+        setTimeout(() => {
+          if (!isAnalyzing) {
+            console.log("🔄 Starting analysis after speech error")
+            captureAndAnalyze()
+          }
+        }, 1000)
       }
 
       speechSynthesis.speak(utterance)

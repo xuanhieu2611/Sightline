@@ -1,32 +1,36 @@
 "use client"
 
 import { useRef, useState, useEffect } from "react";
-import { FiCamera } from "react-icons/fi";
+import { FiCamera, FiPlay } from "react-icons/fi";
 
 export default function DescribePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isPlayingAudioRef = useRef(false); // 👈 NEW REF FOR AUDIO STATE
+  const isPlayingAudioRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null); // 👈 NEW: Store audio element
   
-  const [isMonitoring, setIsMonitoring] = useState(true);
+  const [hasStarted, setHasStarted] = useState(false); // 👈 NEW STATE FOR START SCREEN
+  const [isMonitoring, setIsMonitoring] = useState(false); // 👈 Changed to false
   const [lastDescription, setLastDescription] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [manualCapture, setManualCapture] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
-  // Start camera and monitoring automatically when component mounts
+  // Only start camera when user clicks start
   useEffect(() => {
-    startCamera();
-    startMonitoring();
+    if (hasStarted) {
+      startCamera();
+      startMonitoring();
+    }
     
     return () => {
       stopCamera();
       stopMonitoring();
     };
-  }, []);
+  }, [hasStarted]);
 
   // Start camera
   const startCamera = async () => {
@@ -88,9 +92,9 @@ export default function DescribePage() {
     // Start new interval
     intervalRef.current = setInterval(() => {
       console.log("⏰ INTERVAL TRIGGERED - 10 seconds passed");
-      console.log("Current state - isAnalyzing:", isAnalyzing, "isPlayingAudio:", isPlayingAudioRef.current); // 👈 USE REF
+      console.log("Current state - isAnalyzing:", isAnalyzing, "isPlayingAudio:", isPlayingAudioRef.current);
       
-      if (!isAnalyzing && !isPlayingAudioRef.current) { // 👈 CHECK REF INSTEAD OF STATE
+      if (!isAnalyzing && !isPlayingAudioRef.current) {
         console.log("✅ Starting auto capture...");
         captureAndAnalyze(false);
       } else {
@@ -232,7 +236,7 @@ export default function DescribePage() {
   // Play ElevenLabs audio chunks
   const playElevenLabsAudio = async (audioChunks: string[]) => {
     try {
-      isPlayingAudioRef.current = true; // 👈 SET REF
+      isPlayingAudioRef.current = true;
       setIsPlayingAudio(true);
       console.log("🔊 Audio playback started - blocking auto-capture");
       
@@ -251,24 +255,41 @@ export default function DescribePage() {
         offset += buffer.length;
       }
       
-      // Create audio blob and play
+      // Create audio blob
       const audioBlob = new Blob([combinedBuffer], { type: 'audio/mpeg' });
       const audioUrl = URL.createObjectURL(audioBlob);
       
-      const audio = new Audio(audioUrl);
-      audio.play();
-      
-      // Clean up URL after playing
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        isPlayingAudioRef.current = false; // 👈 CLEAR REF
-        setIsPlayingAudio(false);
-        console.log("🔊 Audio playback finished - auto-capture unblocked");
-      };
+      // 👈 USE THE PRE-CREATED AUDIO ELEMENT
+      if (audioRef.current) {
+        const audio = audioRef.current;
+        audio.src = audioUrl;
+        
+        // Set up event handlers
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          isPlayingAudioRef.current = false;
+          setIsPlayingAudio(false);
+          console.log("🔊 Audio playback finished - auto-capture unblocked");
+        };
+        
+        audio.onerror = (error) => {
+          console.error("Audio playback error:", error);
+          URL.revokeObjectURL(audioUrl);
+          isPlayingAudioRef.current = false;
+          setIsPlayingAudio(false);
+        };
+        
+        // Play the audio
+        await audio.play();
+        console.log("🔊 Audio playing successfully");
+      } else {
+        console.error("No audio element available");
+        throw new Error("Audio element not created");
+      }
       
     } catch (error) {
       console.error("Error playing ElevenLabs audio:", error);
-      isPlayingAudioRef.current = false; // 👈 CLEAR REF ON ERROR
+      isPlayingAudioRef.current = false;
       setIsPlayingAudio(false);
       // Fallback to native TTS
       speakText(lastDescription);
@@ -326,11 +347,74 @@ export default function DescribePage() {
     // Stop auto monitoring
     stopMonitoring();
     
+    // 👈 CREATE AUDIO ELEMENT HERE during user interaction
+    audioRef.current = new Audio();
+    console.log("🔊 Audio element created during click");
+    
     setManualCapture(true);
     captureAndAnalyze(true);
     
     setTimeout(() => setManualCapture(false), 2000);
   };
+
+  // Handle start button - unlocks audio and starts monitoring
+  const handleStart = async () => {
+    console.log("🚀 START BUTTON CLICKED - Unlocking audio");
+    
+    // Unlock speechSynthesis by speaking empty text
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance("");
+      speechSynthesis.speak(utterance);
+      console.log("🔊 speechSynthesis unlocked");
+    }
+    
+    // Unlock Audio() for ElevenLabs - must be synchronous
+    try {
+      const audio = new Audio();
+      audio.volume = 0.01; // Very quiet but not muted
+      
+      // Use a tiny real audio file instead of base64
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      gainNode.gain.value = 0.01;
+      oscillator.frequency.value = 20; // Very low frequency
+      
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.01); // Play for 10ms
+      
+      console.log("🔊 Audio() unlocked");
+      
+      // Resume audio context if suspended
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+    } catch (error) {
+      console.error("Audio unlock failed:", error);
+    }
+    
+    setHasStarted(true);
+  };
+
+  // Show start screen if not started yet
+  if (!hasStarted) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
+        <button
+          onClick={handleStart}
+          className="w-full h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-300 cursor-pointer"
+        >
+          <FiPlay className="text-9xl mb-8 animate-pulse" />
+          <h1 className="text-6xl md:text-8xl font-bold mb-6">SIGHTLINE</h1>
+          <p className="text-2xl md:text-4xl mb-4">Tap to Start</p>
+          <p className="text-lg md:text-xl text-gray-200">Continuous AI Vision Assistant</p>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">

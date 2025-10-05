@@ -24,11 +24,25 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
     const streamRef = useRef<MediaStream | null>(null)
     const [isOpen, setIsOpen] = useState(false)
     const [countdown, setCountdown] = useState<number | null>(null)
+    const speechInitialized = useRef(false)
 
     useImperativeHandle(
       ref,
       () => ({
-        open: () => setIsOpen(true),
+        open: () => {
+          // Initialize speech synthesis on user interaction (required for mobile)
+          if (!speechInitialized.current && typeof window !== "undefined") {
+            try {
+              // Prime the speech synthesis with a silent utterance
+              const primeUtterance = new SpeechSynthesisUtterance("")
+              window.speechSynthesis.speak(primeUtterance)
+              speechInitialized.current = true
+            } catch (err) {
+              console.warn("Speech synthesis initialization failed:", err)
+            }
+          }
+          setIsOpen(true)
+        },
       }),
       []
     )
@@ -83,9 +97,25 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
       }
 
       // Speak countdown for accessibility
-      const utterance = new SpeechSynthesisUtterance(countdown.toString())
-      utterance.rate = 1.5
-      window.speechSynthesis.speak(utterance)
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        try {
+          // Cancel any pending speech to avoid queue buildup
+          window.speechSynthesis.cancel()
+
+          const utterance = new SpeechSynthesisUtterance(countdown.toString())
+          utterance.rate = 1.5
+          utterance.volume = 1.0
+
+          // Add error handler for mobile compatibility
+          utterance.onerror = (event) => {
+            console.warn("Speech synthesis error:", event)
+          }
+
+          window.speechSynthesis.speak(utterance)
+        } catch (err) {
+          console.warn("Failed to speak countdown:", err)
+        }
+      }
 
       // Haptic feedback if available
       if (navigator.vibrate) {
@@ -96,7 +126,13 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
         setCountdown(countdown - 1)
       }, 1000)
 
-      return () => clearTimeout(timer)
+      return () => {
+        clearTimeout(timer)
+        // Clean up speech on unmount
+        if (typeof window !== "undefined" && window.speechSynthesis) {
+          window.speechSynthesis.cancel()
+        }
+      }
     }, [countdown])
 
     const capturePhoto = async () => {
@@ -116,9 +152,16 @@ const MobileCapture = forwardRef<MobileCaptureHandle, Props>(
         (blob) => {
           if (blob) {
             // Audio feedback for capture
-            const utterance = new SpeechSynthesisUtterance("Photo captured")
-            utterance.rate = 1.5
-            window.speechSynthesis.speak(utterance)
+            if (typeof window !== "undefined" && window.speechSynthesis) {
+              try {
+                const utterance = new SpeechSynthesisUtterance("Photo captured")
+                utterance.rate = 1.5
+                utterance.volume = 1.0
+                window.speechSynthesis.speak(utterance)
+              } catch (err) {
+                console.warn("Failed to speak capture confirmation:", err)
+              }
+            }
 
             // Double vibration for capture confirmation
             if (navigator.vibrate) {

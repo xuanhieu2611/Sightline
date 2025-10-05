@@ -29,6 +29,24 @@ export default function DescribePage() {
     }
   }, [imageUrl])
 
+  // Announce mode when page loads
+  useEffect(() => {
+    const announceMode = () => {
+      if ("speechSynthesis" in window) {
+        speechSynthesis.cancel()
+        const utterance = new SpeechSynthesisUtterance("Describe mode")
+        utterance.rate = 0.9
+        utterance.pitch = 1
+        utterance.volume = 1
+        speechSynthesis.speak(utterance)
+      }
+    }
+
+    // Small delay to ensure smooth transition
+    const timer = setTimeout(announceMode, 100)
+    return () => clearTimeout(timer)
+  }, [])
+
   const handleCapture = (blob: Blob) => {
     setCapturedBlob(blob)
     setImageUrl(URL.createObjectURL(blob))

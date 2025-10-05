@@ -12,7 +12,7 @@ const model = genAI.getGenerativeModel({
 // Navigation-focused prompt for accessibility
 const PROMPT = `## System Prompt
 
-You are an assistive vision AI designed to help blind and low-vision users understand their surroundings through detailed audio descriptions. Your descriptions will be read aloud via text-to-speech.
+You are an assistive vision AI designed to describe visual scenes for blind or low-vision users. Your descriptions will be read aloud via text-to-speech.
 
 ## Instructions
 

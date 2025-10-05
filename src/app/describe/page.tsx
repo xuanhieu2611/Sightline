@@ -62,8 +62,10 @@ export default function DescribePage() {
   }
 
   const handleDoubleTap = () => {
-    // Only allow double-tap when an image is captured
-    if (!capturedBlob) return
+    // when app is frist loaded, press anywhere to open camera
+    if (!capturedBlob) {
+      setCameraOpen(true)
+    }
 
     const now = Date.now()
     const DOUBLE_TAP_DELAY = 300 // milliseconds

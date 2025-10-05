@@ -1,25 +1,30 @@
 "use client"
 
 import { useRef, useState, useEffect } from "react";
-import { FiCamera, FiPause, FiPlay } from "react-icons/fi";
+import { FiCamera } from "react-icons/fi";
 
 export default function DescribePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isPlayingAudioRef = useRef(false); // 👈 NEW REF FOR AUDIO STATE
   
-  const [isMonitoring, setIsMonitoring] = useState(false);
+  const [isMonitoring, setIsMonitoring] = useState(true);
   const [lastDescription, setLastDescription] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [manualCapture, setManualCapture] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
-  // Start camera automatically when component mounts
+  // Start camera and monitoring automatically when component mounts
   useEffect(() => {
     startCamera();
+    startMonitoring();
+    
     return () => {
       stopCamera();
+      stopMonitoring();
     };
   }, []);
 
@@ -55,10 +60,45 @@ export default function DescribePage() {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+  };
+
+  // Stop monitoring
+  const stopMonitoring = () => {
+    console.log("🔴 STOPPING MONITORING");
+    setIsMonitoring(false);
+    
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      console.log("Interval cleared");
+    }
+  };
+
+  // Start monitoring
+  const startMonitoring = () => {
+    console.log("🟢 STARTING MONITORING");
+    setIsMonitoring(true);
+    
+    // Clear any existing interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    
+    // Start new interval
+    intervalRef.current = setInterval(() => {
+      console.log("⏰ INTERVAL TRIGGERED - 10 seconds passed");
+      console.log("Current state - isAnalyzing:", isAnalyzing, "isPlayingAudio:", isPlayingAudioRef.current); // 👈 USE REF
+      
+      if (!isAnalyzing && !isPlayingAudioRef.current) { // 👈 CHECK REF INSTEAD OF STATE
+        console.log("✅ Starting auto capture...");
+        captureAndAnalyze(false);
+      } else {
+        console.log("❌ Skipping - analyzing or audio playing");
+      }
+    }, 10000);
+    
+    console.log("Interval created:", intervalRef.current);
   };
 
   // Capture image and analyze
@@ -113,6 +153,12 @@ export default function DescribePage() {
     } finally {
       setIsAnalyzing(false);
       console.log("✅ Analysis complete, analyzing set to false");
+      
+      // Resume monitoring after manual capture
+      if (isManual) {
+        console.log("🔄 Resuming auto-monitoring after manual capture");
+        startMonitoring();
+      }
     }
   };
 
@@ -186,6 +232,10 @@ export default function DescribePage() {
   // Play ElevenLabs audio chunks
   const playElevenLabsAudio = async (audioChunks: string[]) => {
     try {
+      isPlayingAudioRef.current = true; // 👈 SET REF
+      setIsPlayingAudio(true);
+      console.log("🔊 Audio playback started - blocking auto-capture");
+      
       // Convert base64 chunks to audio buffers
       const audioBuffers = audioChunks.map(chunk => 
         Uint8Array.from(atob(chunk), c => c.charCodeAt(0))
@@ -211,10 +261,15 @@ export default function DescribePage() {
       // Clean up URL after playing
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
+        isPlayingAudioRef.current = false; // 👈 CLEAR REF
+        setIsPlayingAudio(false);
+        console.log("🔊 Audio playback finished - auto-capture unblocked");
       };
       
     } catch (error) {
       console.error("Error playing ElevenLabs audio:", error);
+      isPlayingAudioRef.current = false; // 👈 CLEAR REF ON ERROR
+      setIsPlayingAudio(false);
       // Fallback to native TTS
       speakText(lastDescription);
     }
@@ -241,7 +296,7 @@ export default function DescribePage() {
       
       if (data.description) {
         setLastDescription(data.description);
-        speakText(data.description); // Use native TTS for auto capture
+        speakText(data.description);
       }
       
     } catch (error) {
@@ -264,62 +319,17 @@ export default function DescribePage() {
     }
   };
 
-  // Manual capture button - ONE TIME ONLY
+  // Manual capture button - PAUSES auto mode temporarily
   const handleManualCapture = () => {
-    console.log("👆 Manual capture triggered - ONE TIME");
+    console.log("👆 Manual capture triggered - PAUSING AUTO MODE");
+    
+    // Stop auto monitoring
+    stopMonitoring();
+    
     setManualCapture(true);
-    captureAndAnalyze(true); // Pass true for manual
+    captureAndAnalyze(true);
+    
     setTimeout(() => setManualCapture(false), 2000);
-  };
-
-  // Start monitoring
-  const startMonitoring = () => {
-    console.log("🟢 STARTING MONITORING");
-    setIsMonitoring(true);
-    
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
-    // Start new interval
-    intervalRef.current = setInterval(() => {
-      console.log("⏰ INTERVAL TRIGGERED - 5 seconds passed");
-      console.log("Current state - isMonitoring:", isMonitoring, "isAnalyzing:", isAnalyzing);
-      
-      if (!isAnalyzing) {
-        console.log("✅ Starting auto capture...");
-        captureAndAnalyze(false); // Pass false for auto
-      } else {
-        console.log("❌ Skipping - already analyzing");
-      }
-    }, 10000);
-    
-    console.log("Interval created:", intervalRef.current);
-  };
-
-  // Stop monitoring
-  const stopMonitoring = () => {
-    console.log("🔴 STOPPING MONITORING");
-    setIsMonitoring(false);
-    
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      console.log("Interval cleared");
-    }
-  };
-
-  // Toggle monitoring
-  const toggleMonitoring = () => {
-    console.log("🔄 TOGGLE CLICKED - Current monitoring:", isMonitoring);
-    
-    if (isMonitoring) {
-      stopMonitoring();
-    } else {
-      startMonitoring();
-    }
   };
 
   return (
@@ -358,64 +368,46 @@ export default function DescribePage() {
               
               {/* Status Overlay */}
               <div className="absolute top-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-sm">
-                {isMonitoring ? (
-                  <span className="text-green-400">🔴 Monitoring</span>
-                ) : (
-                  <span className="text-yellow-400">⏸️ Paused</span>
-                )}
+                <span className="text-green-400">🔴 Live Monitoring</span>
                 {isAnalyzing && (
                   <span className="text-blue-400 ml-2">Analyzing...</span>
+                )}
+                {manualCapture && (
+                  <span className="text-yellow-400 ml-2">(Manual)</span>
+                )}
+                {isPlayingAudio && (
+                  <span className="text-purple-400 ml-2">🔊 Playing</span>
                 )}
               </div>
             </div>
 
             {/* Controls */}
-            <div className="flex justify-center space-x-4 mb-6">
-              <button
-                onClick={toggleMonitoring}
-                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                  isMonitoring
-                    ? "bg-yellow-600 text-white hover:bg-yellow-700"
-                    : "bg-green-600 text-white hover:bg-green-700"
-                }`}
-              >
-                {isMonitoring ? (
-                  <>
-                    <FiPause className="inline mr-2" />
-                    Pause
-                  </>
-                ) : (
-                  <>
-                    <FiPlay className="inline mr-2" />
-                    Resume
-                  </>
-                )}
-              </button>
-
+            <div className="flex justify-center mb-6">
               <button
                 onClick={handleManualCapture}
                 disabled={isAnalyzing}
-                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                className={`px-8 py-4 rounded-lg font-medium transition-colors ${
                   isAnalyzing || manualCapture
                     ? "bg-gray-600 text-gray-400 cursor-not-allowed"
                     : "bg-blue-600 text-white hover:bg-blue-700"
                 }`}
               >
-                <FiCamera className="inline mr-2" />
+                <FiCamera className="inline mr-2 text-xl" />
                 {manualCapture ? "Capturing..." : "Manual Capture"}
               </button>
             </div>
 
             {/* Debug Info */}
             <div className="text-center text-xs text-gray-500 mb-4">
-              Monitoring: {isMonitoring ? "✅" : "❌"} | 
+              Auto-Monitoring: {isMonitoring ? "✅" : "❌"} | 
               Analyzing: {isAnalyzing ? "✅" : "❌"} |
+              Playing Audio: {isPlayingAudio ? "✅" : "❌"} |
               Interval: {intervalRef.current ? "✅" : "❌"}
             </div>
 
             {/* Instructions */}
             <div className="text-center text-sm text-gray-400 mb-4">
-              {!isMonitoring ? "Click 'Resume' to start continuous analysis every 5 seconds" : "Monitoring active - analyzing every 5 seconds"}
+              Live monitoring active - analyzing every 10 seconds. Click "Manual Capture" for detailed analysis.
             </div>
 
             {/* Last Description */}

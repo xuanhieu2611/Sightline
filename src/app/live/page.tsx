@@ -2,7 +2,6 @@
 
 import { useRef, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { FiCamera } from "react-icons/fi"
 
 export default function DescribePage() {
   const router = useRouter()
@@ -10,16 +9,11 @@ export default function DescribePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const isPlayingAudioRef = useRef(false)
-  const audioRef = useRef<HTMLAudioElement | null>(null) // 👈 NEW: Store audio element
-  const abortControllerRef = useRef<AbortController | null>(null) // For canceling fetch requests
 
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [lastDescription, setLastDescription] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [manualCapture, setManualCapture] = useState(false)
   const [cameraError, setCameraError] = useState("")
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
 
   // Swipe state
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(
@@ -39,27 +33,10 @@ export default function DescribePage() {
     return () => {
       stopCamera()
       stopMonitoring()
-      // Abort any ongoing fetch requests when unmounting
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
-      // Stop any playing audio when navigating away
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
       // Cancel any speech synthesis
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel()
       }
-    }
-  }, [])
-
-  // Initialize audio element
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      audioRef.current = new Audio()
     }
   }, [])
 
@@ -141,18 +118,13 @@ export default function DescribePage() {
     // Start new interval
     intervalRef.current = setInterval(() => {
       console.log("⏰ INTERVAL TRIGGERED - 10 seconds passed")
-      console.log(
-        "Current state - isAnalyzing:",
-        isAnalyzing,
-        "isPlayingAudio:",
-        isPlayingAudioRef.current
-      )
+      console.log("Current state - isAnalyzing:", isAnalyzing)
 
-      if (!isAnalyzing && !isPlayingAudioRef.current) {
+      if (!isAnalyzing) {
         console.log("✅ Starting auto capture...")
-        captureAndAnalyze(false)
+        captureAndAnalyze()
       } else {
-        console.log("❌ Skipping - analyzing or audio playing")
+        console.log("❌ Skipping - analyzing")
       }
     }, 10000)
 
@@ -160,11 +132,8 @@ export default function DescribePage() {
   }
 
   // Capture image and analyze
-  const captureAndAnalyze = async (isManual = false) => {
-    console.log(
-      "📸 Starting capture and analyze",
-      isManual ? "(MANUAL)" : "(AUTO)"
-    )
+  const captureAndAnalyze = async () => {
+    console.log("📸 Starting capture and analyze (AUTO)")
 
     if (!videoRef.current || !canvasRef.current || isAnalyzing) {
       console.log(
@@ -212,167 +181,14 @@ export default function DescribePage() {
         )
       })
 
-      // Send to different APIs based on manual vs auto
+      // Send to API
       console.log("🌐 Sending to API...")
-      if (isManual) {
-        await analyzeImageManual(imageBlob)
-      } else {
-        await analyzeImageAuto(imageBlob)
-      }
+      await analyzeImageAuto(imageBlob)
     } catch (error) {
       console.error("Capture error:", error)
     } finally {
       setIsAnalyzing(false)
       console.log("✅ Analysis complete, analyzing set to false")
-
-      // Resume monitoring after manual capture
-      if (isManual) {
-        console.log("🔄 Resuming auto-monitoring after manual capture")
-        startMonitoring()
-      }
-    }
-  }
-
-  // Analyze image for MANUAL capture - uses /api/image-describe (streaming with ElevenLabs audio)
-  const analyzeImageManual = async (imageBlob: Blob) => {
-    try {
-      // Create abort controller for this request
-      abortControllerRef.current = new AbortController()
-
-      const formData = new FormData()
-      formData.append("image", imageBlob)
-
-      console.log("📝 Using /api/image-describe for manual capture")
-      const response = await fetch("/api/image-describe", {
-        method: "POST",
-        body: formData,
-        signal: abortControllerRef.current.signal,
-      })
-
-      if (!response.ok) {
-        throw new Error("Analysis failed")
-      }
-
-      // Handle streaming response
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error("No response body")
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ""
-      let fullText = ""
-      const audioChunks: string[] = []
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split("\n")
-        buffer = lines.pop() ?? ""
-
-        for (const line of lines) {
-          if (!line.trim()) continue
-          try {
-            const obj = JSON.parse(line)
-            if (obj.type === "text" && obj.chunk) {
-              fullText += obj.chunk
-              setLastDescription(fullText)
-            } else if (obj.type === "audio" && obj.chunk) {
-              audioChunks.push(obj.chunk)
-            }
-          } catch (e) {
-            // ignore partial JSON
-          }
-        }
-      }
-
-      console.log("🤖 Manual final description:", fullText)
-
-      // Play ElevenLabs audio if available
-      if (audioChunks.length > 0) {
-        console.log("🔊 Playing ElevenLabs audio chunks:", audioChunks.length)
-        await playElevenLabsAudio(audioChunks)
-      } else {
-        console.log("⚠️ No audio chunks received, falling back to native TTS")
-        speakText(fullText)
-      }
-    } catch (error) {
-      // Handle abort errors gracefully (user navigated away)
-      if (error instanceof Error && error.name === "AbortError") {
-        console.log("🚫 Request aborted (user navigated away)")
-      } else {
-        console.error("Manual analysis error:", error)
-      }
-    } finally {
-      // Clean up abort controller reference
-      abortControllerRef.current = null
-    }
-  }
-
-  // Play ElevenLabs audio chunks
-  const playElevenLabsAudio = async (audioChunks: string[]) => {
-    try {
-      isPlayingAudioRef.current = true
-      setIsPlayingAudio(true)
-      console.log("🔊 Audio playback started - blocking auto-capture")
-
-      // Convert base64 chunks to audio buffers
-      const audioBuffers = audioChunks.map((chunk) =>
-        Uint8Array.from(atob(chunk), (c) => c.charCodeAt(0))
-      )
-
-      // Combine all audio buffers
-      const totalLength = audioBuffers.reduce(
-        (sum, buffer) => sum + buffer.length,
-        0
-      )
-      const combinedBuffer = new Uint8Array(totalLength)
-
-      let offset = 0
-      for (const buffer of audioBuffers) {
-        combinedBuffer.set(buffer, offset)
-        offset += buffer.length
-      }
-
-      // Create audio blob
-      const audioBlob = new Blob([combinedBuffer], { type: "audio/mpeg" })
-      const audioUrl = URL.createObjectURL(audioBlob)
-
-      // 👈 USE THE PRE-CREATED AUDIO ELEMENT
-      if (audioRef.current) {
-        const audio = audioRef.current
-        audio.src = audioUrl
-
-        // Set up event handlers
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl)
-          isPlayingAudioRef.current = false
-          setIsPlayingAudio(false)
-          console.log("🔊 Audio playback finished - auto-capture unblocked")
-        }
-
-        audio.onerror = (error) => {
-          console.error("Audio playback error:", error)
-          URL.revokeObjectURL(audioUrl)
-          isPlayingAudioRef.current = false
-          setIsPlayingAudio(false)
-        }
-
-        // Play the audio
-        await audio.play()
-        console.log("🔊 Audio playing successfully")
-      } else {
-        console.error("No audio element available")
-        throw new Error("Audio element not created")
-      }
-    } catch (error) {
-      console.error("Error playing ElevenLabs audio:", error)
-      isPlayingAudioRef.current = false
-      setIsPlayingAudio(false)
-      // Fallback to native TTS
-      speakText(lastDescription)
     }
   }
 
@@ -521,12 +337,6 @@ export default function DescribePage() {
                 <span className="text-green-400">🔴 Live Monitoring</span>
                 {isAnalyzing && (
                   <span className="text-blue-400 ml-2">Analyzing...</span>
-                )}
-                {manualCapture && (
-                  <span className="text-yellow-400 ml-2">(Manual)</span>
-                )}
-                {isPlayingAudio && (
-                  <span className="text-purple-400 ml-2">🔊 Playing</span>
                 )}
               </div>
             </div>

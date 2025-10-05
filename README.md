@@ -9,7 +9,7 @@
 [![PWA Ready](https://img.shields.io/badge/PWA-ready-blueviolet?style=for-the-badge)](https://web.dev/pwa/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 
-[Try Live Demo](https://sightline-xi.vercel.app/describe) · [Report Bug](https://github.com/yourusername/Sightline/issues) · [Request Feature](https://github.com/yourusername/Sightline/issues)
+[Try Live Demo](https://sightline-xi.vercel.app/describe) · [Report Bug](https://github.com/xuanhieu2611/Sightline/issues) · [Request Feature](https://github.com/xuanhieu2611/Sightline/issues)
 
 </div>
 
@@ -119,7 +119,7 @@ Want to contribute or run your own instance?
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/Sightline.git
+git clone https://github.com/xuanhieu2611/Sightline.git
 cd Sightline
 
 # Install dependencies
@@ -244,9 +244,9 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 
 Have questions, suggestions, or just want to say hi?
 
-- 🐛 [Report a Bug](https://github.com/yourusername/Sightline/issues)
-- 💡 [Request a Feature](https://github.com/yourusername/Sightline/issues)
-- ⭐ [Star on GitHub](https://github.com/yourusername/Sightline)
+- 🐛 [Report a Bug](https://github.com/xuanhieu2611/Sightline/issues)
+- 💡 [Request a Feature](https://github.com/xuanhieu2611/Sightline/issues)
+- ⭐ [Star on GitHub](https://github.com/xuanhieu2611/Sightline)
 
 ---
 
@@ -254,6 +254,6 @@ Have questions, suggestions, or just want to say hi?
 
 **Made with ❤️ for accessibility**
 
-[Try Sightline Now](https://sightline-xi.vercel.app/describe) · [Learn More](https://github.com/yourusername/Sightline)
+[Try Sightline Now](https://sightline-xi.vercel.app/describe) · [Learn More](https://github.com/xuanhieu2611/Sightline)
 
 </div>

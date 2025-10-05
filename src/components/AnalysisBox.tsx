@@ -162,179 +162,175 @@ export default function AnalysisBox({ blob }: Props) {
   useEffect(() => {
     if (!blob) return
     const ac = new AbortController()
-    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null(
-      async () => {
-        setAnalyzing(true)
-        setDescription("")
-        audioQueueRef.current = []
-        isPlayingRef.current = false
-        setIsPlaying(false)
-        savedAudioBlobRef.current = null
-        allAudioChunksRef.current = [] // Reset audio chunks
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+    ;(async () => {
+      setAnalyzing(true)
+      setDescription("")
+      audioQueueRef.current = []
+      isPlayingRef.current = false
+      setIsPlaying(false)
+      savedAudioBlobRef.current = null
+      allAudioChunksRef.current = [] // Reset audio chunks
 
-        try {
-          const form = new FormData()
-          form.append("image", blob, "photo.jpg")
+      try {
+        const form = new FormData()
+        form.append("image", blob, "photo.jpg")
 
-          const res = await fetch("/api/image-describe", {
-            method: "POST",
-            body: form,
-            signal: ac.signal,
-          })
+        const res = await fetch("/api/image-describe", {
+          method: "POST",
+          body: form,
+          signal: ac.signal,
+        })
 
-          if (!res.ok) {
-            console.warn(
-              "analyze-image failed",
-              await res.text().catch(() => "")
-            )
-            setAnalyzing(false)
-            return
-          }
+        if (!res.ok) {
+          console.warn("analyze-image failed", await res.text().catch(() => ""))
+          setAnalyzing(false)
+          return
+        }
 
-          if (!res.body) {
-            // fallback: non-streaming response — expect text description
-            const json = await res.json().catch(() => null)
-            if (json?.description) {
-              setDescription(json.description)
-              const b = await synthesizeChunk(json.description, ac.signal)
-              if (b) {
-                audioQueueRef.current.push(b)
-                allAudioChunksRef.current.push(b)
-                playNextAudio()
-              }
-            }
-            setAnalyzing(false)
-            return
-          }
-
-          reader = res.body.getReader()
-          const decoder = new TextDecoder()
-          let buffer = ""
-          let fullText = ""
-
-          while (true) {
-            const { value, done } = await reader.read()
-            if (done) break
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split("\n")
-            buffer = lines.pop() ?? ""
-
-            for (const line of lines) {
-              if (!line.trim()) continue
-              try {
-                const obj = JSON.parse(line)
-                // if server already produced audio chunks (base64), queue them directly
-                if (obj.type === "audio" && obj.chunk) {
-                  const audioData = Uint8Array.from(atob(obj.chunk), (c) =>
-                    c.charCodeAt(0)
-                  )
-                  const audioBlob = new Blob([audioData], {
-                    type: "audio/mpeg",
-                  })
-                  allAudioChunksRef.current.push(audioBlob) // Collect ALL chunks
-                  audioQueueRef.current.push(audioBlob)
-                  if (!isPlayingRef.current) playNextAudio()
-                }
-
-                // if server sends text chunks, synthesize via ElevenLabs proxy
-                else if (obj.type === "text" && obj.chunk) {
-                  fullText += obj.chunk
-                  setDescription(fullText)
-                  // synthesize asynchronously but don't block parsing
-                  synthesizeChunk(obj.chunk, ac.signal).then((audioBlob) => {
-                    if (audioBlob) {
-                      allAudioChunksRef.current.push(audioBlob) // Collect ALL chunks
-                      audioQueueRef.current.push(audioBlob)
-                      if (!isPlayingRef.current) playNextAudio()
-                    }
-                  })
-                }
-
-                // When done, combine all audio chunks
-                else if (obj.type === "done") {
-                  if (allAudioChunksRef.current.length > 0) {
-                    try {
-                      savedAudioBlobRef.current = await combineAudioBlobs(
-                        allAudioChunksRef.current
-                      )
-                      console.log(
-                        "Combined audio chunks:",
-                        allAudioChunksRef.current.length
-                      )
-                    } catch (err) {
-                      console.warn("Failed to combine audio blobs:", err)
-                      // Fallback: use the last blob
-                      savedAudioBlobRef.current =
-                        allAudioChunksRef.current[
-                          allAudioChunksRef.current.length - 1
-                        ]
-                    }
-                  }
-                } else if (obj.type === "error") {
-                  console.error("analysis error:", obj.error)
-                }
-              } catch (e) {
-                // ignore partial JSON
-              }
+        if (!res.body) {
+          // fallback: non-streaming response — expect text description
+          const json = await res.json().catch(() => null)
+          if (json?.description) {
+            setDescription(json.description)
+            const b = await synthesizeChunk(json.description, ac.signal)
+            if (b) {
+              audioQueueRef.current.push(b)
+              allAudioChunksRef.current.push(b)
+              playNextAudio()
             }
           }
+          setAnalyzing(false)
+          return
+        }
 
-          // flush remaining buffer
-          if (buffer.trim()) {
+        reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+        let fullText = ""
+
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split("\n")
+          buffer = lines.pop() ?? ""
+
+          for (const line of lines) {
+            if (!line.trim()) continue
             try {
-              const obj = JSON.parse(buffer)
-              if (obj.type === "text" && obj.chunk) {
-                fullText += obj.chunk
-                setDescription(fullText)
-                const audioBlob = await synthesizeChunk(obj.chunk, ac.signal)
-                if (audioBlob) {
-                  allAudioChunksRef.current.push(audioBlob)
-                  audioQueueRef.current.push(audioBlob)
-                  if (!isPlayingRef.current) playNextAudio()
-                }
-              } else if (obj.type === "audio" && obj.chunk) {
+              const obj = JSON.parse(line)
+              // if server already produced audio chunks (base64), queue them directly
+              if (obj.type === "audio" && obj.chunk) {
                 const audioData = Uint8Array.from(atob(obj.chunk), (c) =>
                   c.charCodeAt(0)
                 )
-                const audioBlob = new Blob([audioData], { type: "audio/mpeg" })
+                const audioBlob = new Blob([audioData], {
+                  type: "audio/mpeg",
+                })
+                allAudioChunksRef.current.push(audioBlob) // Collect ALL chunks
+                audioQueueRef.current.push(audioBlob)
+                if (!isPlayingRef.current) playNextAudio()
+              }
+
+              // if server sends text chunks, synthesize via ElevenLabs proxy
+              else if (obj.type === "text" && obj.chunk) {
+                fullText += obj.chunk
+                setDescription(fullText)
+                // synthesize asynchronously but don't block parsing
+                synthesizeChunk(obj.chunk, ac.signal).then((audioBlob) => {
+                  if (audioBlob) {
+                    allAudioChunksRef.current.push(audioBlob) // Collect ALL chunks
+                    audioQueueRef.current.push(audioBlob)
+                    if (!isPlayingRef.current) playNextAudio()
+                  }
+                })
+              }
+
+              // When done, combine all audio chunks
+              else if (obj.type === "done") {
+                if (allAudioChunksRef.current.length > 0) {
+                  try {
+                    savedAudioBlobRef.current = await combineAudioBlobs(
+                      allAudioChunksRef.current
+                    )
+                    console.log(
+                      "Combined audio chunks:",
+                      allAudioChunksRef.current.length
+                    )
+                  } catch (err) {
+                    console.warn("Failed to combine audio blobs:", err)
+                    // Fallback: use the last blob
+                    savedAudioBlobRef.current =
+                      allAudioChunksRef.current[
+                        allAudioChunksRef.current.length - 1
+                      ]
+                  }
+                }
+              } else if (obj.type === "error") {
+                console.error("analysis error:", obj.error)
+              }
+            } catch (e) {
+              // ignore partial JSON
+            }
+          }
+        }
+
+        // flush remaining buffer
+        if (buffer.trim()) {
+          try {
+            const obj = JSON.parse(buffer)
+            if (obj.type === "text" && obj.chunk) {
+              fullText += obj.chunk
+              setDescription(fullText)
+              const audioBlob = await synthesizeChunk(obj.chunk, ac.signal)
+              if (audioBlob) {
                 allAudioChunksRef.current.push(audioBlob)
                 audioQueueRef.current.push(audioBlob)
                 if (!isPlayingRef.current) playNextAudio()
               }
-            } catch {}
-          }
-
-          // Final combination if not done yet
-          if (
-            allAudioChunksRef.current.length > 0 &&
-            !savedAudioBlobRef.current
-          ) {
-            try {
-              savedAudioBlobRef.current = await combineAudioBlobs(
-                allAudioChunksRef.current
+            } else if (obj.type === "audio" && obj.chunk) {
+              const audioData = Uint8Array.from(atob(obj.chunk), (c) =>
+                c.charCodeAt(0)
               )
-              console.log(
-                "Final combined audio chunks:",
-                allAudioChunksRef.current.length
-              )
-            } catch (err) {
-              console.warn("Failed to combine audio blobs:", err)
-              savedAudioBlobRef.current =
-                allAudioChunksRef.current[allAudioChunksRef.current.length - 1]
+              const audioBlob = new Blob([audioData], { type: "audio/mpeg" })
+              allAudioChunksRef.current.push(audioBlob)
+              audioQueueRef.current.push(audioBlob)
+              if (!isPlayingRef.current) playNextAudio()
             }
-          }
-        } catch (err: any) {
-          if ((err as any)?.name !== "AbortError") {
-            console.error("analysis failed", err)
-          }
-        } finally {
-          setAnalyzing(false)
-          try {
-            reader?.cancel()
           } catch {}
         }
+
+        // Final combination if not done yet
+        if (
+          allAudioChunksRef.current.length > 0 &&
+          !savedAudioBlobRef.current
+        ) {
+          try {
+            savedAudioBlobRef.current = await combineAudioBlobs(
+              allAudioChunksRef.current
+            )
+            console.log(
+              "Final combined audio chunks:",
+              allAudioChunksRef.current.length
+            )
+          } catch (err) {
+            console.warn("Failed to combine audio blobs:", err)
+            savedAudioBlobRef.current =
+              allAudioChunksRef.current[allAudioChunksRef.current.length - 1]
+          }
+        }
+      } catch (err: any) {
+        if ((err as any)?.name !== "AbortError") {
+          console.error("analysis failed", err)
+        }
+      } finally {
+        setAnalyzing(false)
+        try {
+          reader?.cancel()
+        } catch {}
       }
-    )()
+    })()
 
     return () => {
       ac.abort()

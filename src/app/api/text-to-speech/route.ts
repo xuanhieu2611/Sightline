@@ -11,10 +11,7 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!text) {
-      return NextResponse.json(
-        { error: "Text is required" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Text is required" }, { status: 400 })
     }
 
     const ELEVENLABS_API_KEY = process.env.ELEVEN_LABS_API_KEY

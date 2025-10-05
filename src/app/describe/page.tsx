@@ -62,8 +62,8 @@ export default function DescribePage() {
   };
 
   // Capture image and analyze
-  const captureAndAnalyze = async () => {
-    console.log("📸 Starting capture and analyze");
+  const captureAndAnalyze = async (isManual = false) => {
+    console.log("📸 Starting capture and analyze", isManual ? "(MANUAL)" : "(AUTO)");
     
     if (!videoRef.current || !canvasRef.current || isAnalyzing) {
       console.log("❌ Skipping capture - video:", !!videoRef.current, "canvas:", !!canvasRef.current, "analyzing:", isAnalyzing);
@@ -100,9 +100,13 @@ export default function DescribePage() {
         }, "image/jpeg", 0.8);
       });
 
-      // Send to API
+      // Send to different APIs based on manual vs auto
       console.log("🌐 Sending to API...");
-      await analyzeImage(imageBlob);
+      if (isManual) {
+        await analyzeImageManual(imageBlob);
+      } else {
+        await analyzeImageAuto(imageBlob);
+      }
       
     } catch (error) {
       console.error("Capture error:", error);
@@ -112,13 +116,14 @@ export default function DescribePage() {
     }
   };
 
-  // Analyze image with existing API
-  const analyzeImage = async (imageBlob: Blob) => {
+  // Analyze image for MANUAL capture - uses /api/image-describe (streaming with ElevenLabs audio)
+  const analyzeImageManual = async (imageBlob: Blob) => {
     try {
       const formData = new FormData();
       formData.append("image", imageBlob);
 
-      const response = await fetch("/api/analyze-image", {
+      console.log("📝 Using /api/image-describe for manual capture");
+      const response = await fetch("/api/image-describe", {
         method: "POST",
         body: formData,
       });
@@ -136,6 +141,7 @@ export default function DescribePage() {
       const decoder = new TextDecoder();
       let buffer = "";
       let fullText = "";
+      const audioChunks: string[] = [];
 
       while (true) {
         const { value, done } = await reader.read();
@@ -152,7 +158,8 @@ export default function DescribePage() {
             if (obj.type === "text" && obj.chunk) {
               fullText += obj.chunk;
               setLastDescription(fullText);
-              speakText(obj.chunk);
+            } else if (obj.type === "audio" && obj.chunk) {
+              audioChunks.push(obj.chunk);
             }
           } catch (e) {
             // ignore partial JSON
@@ -160,10 +167,85 @@ export default function DescribePage() {
         }
       }
 
-      console.log("🤖 Final description:", fullText);
+      console.log("🤖 Manual final description:", fullText);
+      
+      // Play ElevenLabs audio if available
+      if (audioChunks.length > 0) {
+        console.log("🔊 Playing ElevenLabs audio chunks:", audioChunks.length);
+        await playElevenLabsAudio(audioChunks);
+      } else {
+        console.log("⚠️ No audio chunks received, falling back to native TTS");
+        speakText(fullText);
+      }
       
     } catch (error) {
-      console.error("Analysis error:", error);
+      console.error("Manual analysis error:", error);
+    }
+  };
+
+  // Play ElevenLabs audio chunks
+  const playElevenLabsAudio = async (audioChunks: string[]) => {
+    try {
+      // Convert base64 chunks to audio buffers
+      const audioBuffers = audioChunks.map(chunk => 
+        Uint8Array.from(atob(chunk), c => c.charCodeAt(0))
+      );
+      
+      // Combine all audio buffers
+      const totalLength = audioBuffers.reduce((sum, buffer) => sum + buffer.length, 0);
+      const combinedBuffer = new Uint8Array(totalLength);
+      
+      let offset = 0;
+      for (const buffer of audioBuffers) {
+        combinedBuffer.set(buffer, offset);
+        offset += buffer.length;
+      }
+      
+      // Create audio blob and play
+      const audioBlob = new Blob([combinedBuffer], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      const audio = new Audio(audioUrl);
+      audio.play();
+      
+      // Clean up URL after playing
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+    } catch (error) {
+      console.error("Error playing ElevenLabs audio:", error);
+      // Fallback to native TTS
+      speakText(lastDescription);
+    }
+  };
+
+  // Analyze image for AUTO capture - uses /api/image-analyze (JSON response)
+  const analyzeImageAuto = async (imageBlob: Blob) => {
+    try {
+      const formData = new FormData();
+      formData.append("image", imageBlob);
+
+      console.log("🔄 Using /api/image-analyze for auto capture");
+      const response = await fetch("/api/image-analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Analysis failed");
+      }
+
+      const data = await response.json();
+      console.log("🤖 Auto API response:", data);
+      
+      if (data.description) {
+        setLastDescription(data.description);
+        speakText(data.description); // Use native TTS for auto capture
+      }
+      
+    } catch (error) {
+      console.error("Auto analysis error:", error);
     }
   };
 
@@ -186,7 +268,7 @@ export default function DescribePage() {
   const handleManualCapture = () => {
     console.log("👆 Manual capture triggered - ONE TIME");
     setManualCapture(true);
-    captureAndAnalyze();
+    captureAndAnalyze(true); // Pass true for manual
     setTimeout(() => setManualCapture(false), 2000);
   };
 
@@ -207,12 +289,12 @@ export default function DescribePage() {
       console.log("Current state - isMonitoring:", isMonitoring, "isAnalyzing:", isAnalyzing);
       
       if (!isAnalyzing) {
-        console.log("✅ Starting capture...");
-        captureAndAnalyze();
+        console.log("✅ Starting auto capture...");
+        captureAndAnalyze(false); // Pass false for auto
       } else {
         console.log("❌ Skipping - already analyzing");
       }
-    }, 5000);
+    }, 10000);
     
     console.log("Interval created:", intervalRef.current);
   };
